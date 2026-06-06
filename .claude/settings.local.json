@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Read(//Users/vladcodrean/**)",
-      "Bash(npx --yes create-next-app@latest crm-lux-store --js --tailwind --app --no-src-dir --no-turbopack --import-alias \"@/*\" --use-npm --yes)"
-    ]
-  }
-}
