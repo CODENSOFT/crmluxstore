@@ -11,6 +11,7 @@ import {
   Badge,
   useToast,
 } from "@/app/_components/ui";
+import { Icon } from "@/app/_components/icons";
 import { useUser } from "@/app/_components/user";
 
 function CopyRow({ label, value }) {
@@ -50,15 +51,19 @@ export default function IntegrationPage() {
   const [data, setData] = useState(null);
   const [webhook, setWebhook] = useState("");
   const [base, setBase] = useState("");
+  const [publicUrl, setPublicUrl] = useState("");
+  const [savingUrl, setSavingUrl] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setBase(window.location.origin);
     if (me?.role === "admin") {
-      apiGet("/api/integration")
-        .then((d) => {
+      Promise.all([apiGet("/api/integration"), apiGet("/api/settings")])
+        .then(([d, s]) => {
           setData(d);
           setWebhook(d.webhookUrl || "");
+          setPublicUrl(s?.publicUrl || "");
+          // Preferam URL-ul public configurat / de productie; localhost doar ca ultim resort
+          setBase(d.baseUrl || window.location.origin);
         })
         .catch((e) => toast(e.message, "error"));
     }
@@ -82,6 +87,21 @@ export default function IntegrationPage() {
       toast(e.message, "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function savePublicUrl() {
+    setSavingUrl(true);
+    try {
+      const clean = publicUrl.trim().replace(/\/$/, "");
+      await apiPut("/api/settings", { publicUrl: clean });
+      setPublicUrl(clean);
+      if (clean) setBase(clean);
+      toast("URL public salvat");
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      setSavingUrl(false);
     }
   }
 
@@ -109,6 +129,29 @@ export default function IntegrationPage() {
                 URL de baza
               </span>
               <CopyRow label="URL" value={base} />
+              {base.includes("localhost") && (
+                <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  <Icon name="alert" className="mt-px h-4 w-4 shrink-0" />
+                  Acesta e URL local — Make nu se poate conecta la el. Seteaza
+                  mai jos URL-ul public (ex: domeniul Vercel).
+                </p>
+              )}
+              {/* Suprascriere URL public (pentru domeniu propriu) */}
+              <div className="mt-2 flex items-center gap-2">
+                <Input
+                  value={publicUrl}
+                  onChange={(e) => setPublicUrl(e.target.value)}
+                  placeholder="https://crmluxstore.vercel.app"
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={savePublicUrl}
+                  disabled={savingUrl}
+                >
+                  {savingUrl ? "…" : "Seteaza URL"}
+                </Button>
+              </div>
             </div>
             <div>
               <span className="mb-1 block text-sm font-medium text-slate-700">

@@ -6,6 +6,8 @@ const SettingsSchema = new mongoose.Schema(
     companyName: { type: String, default: "CRM Lux Store" },
     currency: { type: String, default: "MDL" },
     makeWebhookUrl: { type: String, default: "" },
+    // URL public al aplicatiei (pentru linkurile catre Make/integrari)
+    publicUrl: { type: String, default: "" },
     lowStockThreshold: { type: Number, default: 5 },
   },
   { timestamps: true }

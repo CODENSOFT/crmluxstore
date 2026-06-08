@@ -27,6 +27,7 @@ export async function PUT(req) {
     "companyName",
     "currency",
     "makeWebhookUrl",
+    "publicUrl",
     "lowStockThreshold",
   ]) {
     if (body[f] !== undefined) settings[f] = body[f];
