@@ -45,6 +45,14 @@ const ENDPOINTS = [
   ["POST", "/api/make/arrivals", "Receptie marfa (creste stoc)"],
 ];
 
+// URL-uri "frumoase" (alias) — merg cu header x-api-key, ca paginile din meniu
+const FRIENDLY = [
+  ["/comenzi", "= lista / creeaza comenzi"],
+  ["/produse", "= lista / creeaza produse"],
+  ["/depozite", "= lista depozite"],
+  ["/receptie", "= receptie marfa"],
+];
+
 export default function IntegrationPage() {
   const me = useUser();
   const toast = useToast();
@@ -194,6 +202,30 @@ export default function IntegrationPage() {
               {`{ "items": [{ "sku": "ABC", "warehouseId": "...", "quantity": 2 }], "customerName": "Ion" }`}
             </code>
           </p>
+
+          {/* Alias-uri "frumoase" */}
+          <div className="mt-4 rounded-lg bg-indigo-50/60 p-3">
+            <p className="mb-2 text-sm font-medium text-slate-700">
+              URL-uri scurte (alias) — identice cu paginile din meniu
+            </p>
+            <p className="mb-2 text-xs text-slate-500">
+              Merg cu acelasi header <code className="rounded bg-white px-1">x-api-key</code>.
+              Poti pune in Make direct adresa ca in browser:
+            </p>
+            <div className="space-y-1.5">
+              {FRIENDLY.map(([path, desc]) => (
+                <div key={path} className="flex items-center gap-2">
+                  <code className="flex-1 overflow-x-auto rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-emerald-300">
+                    {base}
+                    {path}
+                  </code>
+                  <span className="hidden text-xs text-slate-400 sm:block">
+                    {desc}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </Card>
 
         {/* Webhook iesire */}
