@@ -3,8 +3,10 @@ import Order from "@/models/Order";
 import Product from "@/models/Product";
 import User from "@/models/User";
 import { ok, fail, requireApiKey } from "@/lib/api";
+import { applyOrderStock } from "@/lib/stock";
 import { dispatchToMake } from "@/lib/make";
 import { notifyAdminsForApproval } from "@/lib/notify";
+import { logAudit } from "@/lib/audit";
 
 // Make: citeste comenzile
 export async function GET(req) {
@@ -21,7 +23,7 @@ export async function GET(req) {
   return ok(orders);
 }
 
-// Make: creeaza o comanda (ex: dintr-un formular web). Ramane "pending" pentru aprobare.
+// Make: creeaza o comanda. Vine direct cu status "Complet" si scade stocul.
 // Format items: [{ productId | sku, warehouseId, quantity }]
 export async function POST(req) {
   const auth = requireApiKey(req);
@@ -66,26 +68,41 @@ export async function POST(req) {
   }
 
   const total = +builtItems.reduce((s, i) => s + i.lineTotal, 0).toFixed(2);
-  const count = await Order.countDocuments();
 
+  // Comanda vine "Complet" -> scadem stocul (validare totul-sau-nimic)
+  try {
+    await applyOrderStock(builtItems, -1);
+  } catch (e) {
+    return fail(e.message);
+  }
+
+  const count = await Order.countDocuments();
   const order = await Order.create({
     number: `CMD-${String(count + 1).padStart(6, "0")}`,
     items: builtItems,
     total,
-    status: "new",
+    status: "completed",
     responsible,
     createdBy: admin._id,
+    approvedBy: admin._id,
     customerName: body.customerName,
     note: body.note || "Comanda primita din Make.com",
-    stockApplied: false,
+    stockApplied: true,
   });
 
-  // Notificam adminii despre comanda noua sosita din exterior
   const populated = await Order.findById(order._id)
     .populate("responsible", "name")
     .populate("createdBy", "name")
     .populate("items.warehouse", "name");
+
+  // Notificam adminii ca a sosit o comanda din exterior (informativ)
   await notifyAdminsForApproval(populated, "order_new");
+  await logAudit({
+    action: "created",
+    order: populated,
+    user: { _id: admin._id, name: "Make.com", role: "admin" },
+    details: `Comanda din Make · ${builtItems.length} produse · total ${total} · status Complet`,
+  });
 
   await dispatchToMake("order.created", order.toJSON());
   return ok({ id: String(order._id), number: order.number, total }, {
