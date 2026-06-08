@@ -35,7 +35,7 @@ export default function ArrivalsPage() {
   async function load() {
     try {
       const [p, w, s, h] = await Promise.all([
-        apiGet("/api/products"),
+        apiGet("/api/products?light=1"),
         apiGet("/api/warehouses"),
         apiGet("/api/suppliers"),
         apiGet("/api/arrivals"),

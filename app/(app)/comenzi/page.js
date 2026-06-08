@@ -133,7 +133,7 @@ function OrdersInner() {
       const url = filter ? `/api/orders?status=${filter}` : "/api/orders";
       const [o, p, w, u] = await Promise.all([
         apiGet(url),
-        apiGet("/api/products"),
+        apiGet("/api/products?light=1"),
         apiGet("/api/warehouses"),
         apiGet("/api/users"),
       ]);

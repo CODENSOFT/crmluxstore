@@ -69,20 +69,27 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
 
-  async function load() {
+  // Incarcari independente: o eroare la produse NU mai blocheaza depozitele
+  async function loadProducts() {
     try {
-      const [p, w] = await Promise.all([
-        apiGet("/api/products"),
-        apiGet("/api/warehouses"),
-      ]);
-      setList(p);
-      setWarehouses(w);
+      setList(await apiGet("/api/products"));
     } catch (e) {
       toast(e.message, "error");
     }
   }
+  async function loadWarehouses() {
+    try {
+      setWarehouses(await apiGet("/api/warehouses"));
+    } catch {
+      /* depozitele lipsa nu blocheaza pagina */
+    }
+  }
+  async function load() {
+    await Promise.all([loadProducts(), loadWarehouses()]);
+  }
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onPhoto(e) {
@@ -99,6 +106,7 @@ export default function ProductsPage() {
   function openCreate() {
     setEditId(null);
     setForm(EMPTY);
+    loadWarehouses(); // depozite proaspete (poate ai adaugat unul intre timp)
     setOpen(true);
   }
 

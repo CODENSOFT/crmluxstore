@@ -41,7 +41,7 @@ export default function WriteOffPage() {
   async function load() {
     try {
       const [p, w, h] = await Promise.all([
-        apiGet("/api/products"),
+        apiGet("/api/products?light=1"),
         apiGet("/api/warehouses"),
         apiGet("/api/writeoffs"),
       ]);

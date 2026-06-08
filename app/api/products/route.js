@@ -10,11 +10,15 @@ export async function GET(req) {
   await connectDB();
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q");
+  // ?light=1 -> fara fotografii (base64), raspuns mic si rapid pentru dropdown-uri
+  const light = searchParams.get("light") === "1";
   const filter = {};
   if (q) filter.name = { $regex: q, $options: "i" };
-  const list = await Product.find(filter)
+  let query = Product.find(filter)
     .populate("stock.warehouse", "name")
     .sort({ createdAt: -1 });
+  if (light) query = query.select("-photo");
+  const list = await query;
   return ok(list);
 }
 
