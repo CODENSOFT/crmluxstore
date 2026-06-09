@@ -44,6 +44,19 @@ export async function PATCH(req, { params }) {
 
   const product = await Product.findByIdAndUpdate(id, update, { new: true });
   if (!product) return fail("Produs inexistent", 404);
+
+  // Editare stoc pe depozit: seteaza cantitatea pentru depozitul ales
+  if (body.warehouse && body.quantity !== undefined && body.quantity !== "") {
+    const qty = Number(body.quantity);
+    if (!Number.isNaN(qty) && qty >= 0) {
+      const entry = product.stock.find(
+        (s) => String(s.warehouse) === String(body.warehouse)
+      );
+      if (entry) entry.quantity = qty;
+      else product.stock.push({ warehouse: body.warehouse, quantity: qty });
+      await product.save();
+    }
+  }
   await logAudit({
     action: "product_edited",
     category: "product",

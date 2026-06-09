@@ -114,14 +114,16 @@ export default function ProductsPage() {
 
   function openEdit(p) {
     setEditId(p._id);
+    // Pre-completam cu primul depozit + cantitatea lui (ca sa poti edita stocul)
+    const firstStock = (p.stock || [])[0];
     setForm({
       name: p.name || "",
       description: p.description || "",
       sku: p.sku || "",
       unit: p.unit || "bucata",
       price: p.price ?? "",
-      warehouse: "",
-      quantity: "",
+      warehouse: firstStock?.warehouse?._id || firstStock?.warehouse || "",
+      quantity: firstStock ? String(firstStock.quantity) : "",
       photo: p.photo || "",
       isComposite: !!p.isComposite,
       components: (p.components || []).map((c) => ({
@@ -181,6 +183,9 @@ export default function ProductsPage() {
           photo: form.photo,
           isComposite: form.isComposite,
           components,
+          // Editare stoc pe depozitul ales
+          warehouse: form.warehouse || undefined,
+          quantity: form.warehouse !== "" ? form.quantity : undefined,
         });
         toast("Produs actualizat");
       } else {
@@ -512,11 +517,12 @@ export default function ProductsPage() {
             )}
           </div>
 
-          {!editId && (
           <div className="sm:col-span-2">
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="mb-2 text-xs font-medium text-slate-500">
-                Stoc initial (optional) — adauga produsul direct intr-un depozit
+                {editId
+                  ? "Stoc pe depozit — alege depozitul si seteaza cantitatea"
+                  : "Stoc initial (optional) — adauga produsul direct intr-un depozit"}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Depozit">
@@ -554,7 +560,6 @@ export default function ProductsPage() {
               )}
             </div>
           </div>
-          )}
         </form>
       </Modal>
     </div>
