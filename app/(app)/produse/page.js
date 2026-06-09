@@ -57,6 +57,8 @@ const EMPTY = {
   warehouse: "",
   quantity: "",
   photo: "",
+  isComposite: false,
+  components: [],
 };
 
 export default function ProductsPage() {
@@ -121,14 +123,54 @@ export default function ProductsPage() {
       warehouse: "",
       quantity: "",
       photo: p.photo || "",
+      isComposite: !!p.isComposite,
+      components: (p.components || []).map((c) => ({
+        product: c.product?._id || c.product,
+        quantity: String(c.quantity),
+      })),
     });
+    loadWarehouses();
     setOpen(true);
+  }
+
+  // Componente produs compus
+  function addComponent() {
+    setForm((f) => ({
+      ...f,
+      components: [...f.components, { product: "", quantity: "1" }],
+    }));
+  }
+  function setComponent(i, patch) {
+    setForm((f) => ({
+      ...f,
+      components: f.components.map((c, idx) =>
+        idx === i ? { ...c, ...patch } : c
+      ),
+    }));
+  }
+  function removeComponent(i) {
+    setForm((f) => ({
+      ...f,
+      components: f.components.filter((_, idx) => idx !== i),
+    }));
   }
 
   async function save(e) {
     e.preventDefault();
+    if (form.isComposite) {
+      const valid = form.components.filter(
+        (c) => c.product && Number(c.quantity) > 0
+      );
+      if (valid.length === 0) {
+        toast("Adaugati cel putin un produs in compozitie", "error");
+        return;
+      }
+    }
     setLoading(true);
     try {
+      const components = form.components
+        .filter((c) => c.product && Number(c.quantity) > 0)
+        .map((c) => ({ product: c.product, quantity: Number(c.quantity) }));
       if (editId) {
         await apiPatch(`/api/products/${editId}`, {
           name: form.name,
@@ -137,10 +179,12 @@ export default function ProductsPage() {
           unit: form.unit,
           price: form.price,
           photo: form.photo,
+          isComposite: form.isComposite,
+          components,
         });
         toast("Produs actualizat");
       } else {
-        await apiPost("/api/products", form);
+        await apiPost("/api/products", { ...form, components });
         toast("Produs adaugat");
       }
       setOpen(false);
@@ -238,6 +282,25 @@ export default function ProductsPage() {
                       / {UNIT_LABELS[p.unit]}
                     </span>
                   </div>
+
+                  {p.isComposite && p.components?.length > 0 && (
+                    <div className="mt-2 rounded-lg bg-indigo-50/60 px-2.5 py-2">
+                      <div className="mb-1 flex items-center gap-1 text-xs font-medium text-indigo-700">
+                        <Icon name="package" className="h-3.5 w-3.5" />
+                        Compus din
+                      </div>
+                      <ul className="space-y-0.5 text-xs text-slate-600">
+                        {p.components.map((c, i) => (
+                          <li key={i} className="flex justify-between">
+                            <span className="truncate">{c.productName}</span>
+                            <span className="ml-2 shrink-0 font-medium">
+                              × {c.quantity}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {p.stock?.length > 0 && (
                     <div className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
@@ -367,6 +430,87 @@ export default function ProductsPage() {
               />
             )}
           </Field>
+
+          {/* Tip produs: simplu sau compus din alte produse */}
+          <div className="sm:col-span-2">
+            <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={form.isComposite}
+                onChange={(e) =>
+                  setForm({ ...form, isComposite: e.target.checked })
+                }
+                className="h-4 w-4"
+              />
+              <span className="text-sm font-medium text-slate-700">
+                Produs compus din alte produse (set/kit)
+              </span>
+            </label>
+
+            {form.isComposite && (
+              <div className="mt-2 rounded-lg bg-indigo-50/60 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-600">
+                    Compus din:
+                  </span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={addComponent}
+                  >
+                    <Icon name="plus" className="h-3.5 w-3.5" strokeWidth={2} />
+                    Adauga produs
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {form.components.length === 0 && (
+                    <p className="text-xs text-slate-400">
+                      Adaugati produsele din care e alcatuit.
+                    </p>
+                  )}
+                  {form.components.map((c, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Select
+                        value={c.product}
+                        onChange={(e) =>
+                          setComponent(i, { product: e.target.value })
+                        }
+                        className="flex-1"
+                      >
+                        <option value="">— alege produs —</option>
+                        {list
+                          .filter((p) => p._id !== editId)
+                          .map((p) => (
+                            <option key={p._id} value={p._id}>
+                              {p.name}
+                            </option>
+                          ))}
+                      </Select>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={c.quantity}
+                        onChange={(e) =>
+                          setComponent(i, { quantity: e.target.value })
+                        }
+                        placeholder="Cant."
+                        className="w-24"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeComponent(i)}
+                        className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500"
+                      >
+                        <Icon name="x" className="h-4 w-4" strokeWidth={2} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {!editId && (
           <div className="sm:col-span-2">

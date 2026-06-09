@@ -3,6 +3,7 @@ import Product, { UNITS } from "@/models/Product";
 import { ok, fail, requireUser } from "@/lib/api";
 import { dispatchToMake } from "@/lib/make";
 import { logAudit } from "@/lib/audit";
+import { buildComponents } from "@/lib/productComponents";
 
 export async function GET(req) {
   const { response } = await requireUser();
@@ -39,6 +40,10 @@ export async function POST(req) {
     stock.push({ warehouse, quantity: Number(quantity) });
   }
 
+  // Produs compus din alte produse
+  const isComposite = !!body.isComposite;
+  const components = await buildComponents(isComposite ? body.components : []);
+
   const created = await Product.create({
     name,
     description,
@@ -47,6 +52,8 @@ export async function POST(req) {
     unit: unit || "bucata",
     price: Number(price) || 0,
     stock,
+    isComposite,
+    components,
   });
 
   await logAudit({
@@ -55,7 +62,7 @@ export async function POST(req) {
     entity: created,
     entityName: created.name,
     user,
-    details: `Produs "${created.name}" · ${created.unit} · pret ${created.price}${stock.length ? ` · stoc initial ${stock[0].quantity}` : ""}`,
+    details: `Produs "${created.name}" · ${created.unit} · pret ${created.price}${isComposite ? ` · compus din ${components.length} produse` : ""}${stock.length ? ` · stoc initial ${stock[0].quantity}` : ""}`,
   });
   await dispatchToMake("product.created", created.toJSON());
   return ok(created, { status: 201 });

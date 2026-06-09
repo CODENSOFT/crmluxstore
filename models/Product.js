@@ -15,6 +15,20 @@ const StockSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Componenta unui produs compus (alt produs + cantitate)
+const ComponentSchema = new mongoose.Schema(
+  {
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      required: true,
+    },
+    productName: { type: String }, // snapshot
+    quantity: { type: Number, default: 1, min: 0.0001 },
+  },
+  { _id: false }
+);
+
 const ProductSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -24,6 +38,9 @@ const ProductSchema = new mongoose.Schema(
     unit: { type: String, enum: UNITS, default: "bucata", required: true },
     price: { type: Number, default: 0, min: 0 }, // pret pe unitate
     stock: { type: [StockSchema], default: [] },
+    // Produs compus din alte produse (bundle / set)
+    isComposite: { type: Boolean, default: false },
+    components: { type: [ComponentSchema], default: [] },
     active: { type: Boolean, default: true },
   },
   { timestamps: true }

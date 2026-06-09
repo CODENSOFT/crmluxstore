@@ -2,6 +2,7 @@ import connectDB from "@/lib/mongodb";
 import Product, { UNITS } from "@/models/Product";
 import { ok, fail, requireUser } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
+import { buildComponents } from "@/lib/productComponents";
 
 export async function GET(req, { params }) {
   const { response } = await requireUser();
@@ -32,6 +33,14 @@ export async function PATCH(req, { params }) {
     update.unit = body.unit;
   }
   if (body.price !== undefined) update.price = Number(body.price) || 0;
+
+  // Produs compus din alte produse
+  if (body.isComposite !== undefined) {
+    update.isComposite = !!body.isComposite;
+    update.components = update.isComposite
+      ? await buildComponents(body.components)
+      : [];
+  }
 
   const product = await Product.findByIdAndUpdate(id, update, { new: true });
   if (!product) return fail("Produs inexistent", 404);
