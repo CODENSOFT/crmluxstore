@@ -11,7 +11,7 @@ import { stageInfo } from "@/lib/orderStages";
 import {
   SquaresFour, Receipt, UsersThree, Package, Stack, TrayArrowDown, ArrowsLeftRight, TrashSimple, ClipboardText,
   Truck, Warehouse, CheckSquareOffset, ChartLineUp, Bell, UserGear, PlugsConnected, ClockCounterClockwise, GearSix,
-  MagnifyingGlass, Plus, List, SidebarSimple, SignOut, Moon, Sun, Desktop, UserCircle, X, Drop, CaretRight, Buildings, User,
+  MagnifyingGlass, Plus, List, SidebarSimple, SignOut, Moon, Sun, Desktop, UserCircle, X, Drop, CaretRight, Buildings, User, Warning,
 } from "@/app/_components/icons";
 import { Avatar, Kbd, cx, Spinner } from "@/app/_components/ui";
 import { Menu, Popover } from "@/app/_components/overlay";
@@ -559,6 +559,14 @@ export default function Shell({ user, children }) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {user.authBypass && (
+          <div role="status" className="flex items-center gap-2 border-b border-warn/30 bg-warn-soft px-3 py-1.5 text-[12.5px] text-warn sm:px-5">
+            <Warning size={15} weight="fill" className="shrink-0" />
+            <span>
+              Mod local fără parolă (<code className="font-mono">AUTH_BYPASS=1</code>) — sunteți conectat automat ca administrator. Funcționează doar cu <code className="font-mono">npm run dev</code>, niciodată pe site.
+            </span>
+          </div>
+        )}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-bg/85 px-3 backdrop-blur-md sm:px-5">
           <button
             type="button"

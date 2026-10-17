@@ -1,9 +1,10 @@
 import { connectDB, db, isUuid } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { authBypassEnabled } from "@/lib/authBypass";
 
 // Serveste fotografia produsului (stocata ca data URL) ca imagine, cu cache lung
 export async function GET(req, { params }) {
-  if (!(await getCurrentUser())) return new Response("Neautentificat", { status: 401 });
+  if (!authBypassEnabled() && !(await getCurrentUser())) return new Response("Neautentificat", { status: 401 });
   const { id } = await params;
   if (!isUuid(id)) return new Response("Fără imagine", { status: 404 });
   await connectDB();

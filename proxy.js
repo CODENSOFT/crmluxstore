@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { authBypassEnabled } from "./lib/authBypass";
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 const PUBLIC_PATHS = ["/login"];
@@ -21,7 +22,8 @@ export async function proxy(req) {
   if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname.includes(".")) {
     return NextResponse.next();
   }
-  const authed = await isAuthed(req);
+  // AUTH_BYPASS=1: intrare fara parola (vezi lib/authBypass.js)
+  const authed = authBypassEnabled() || (await isAuthed(req));
   if (PUBLIC_PATHS.includes(pathname)) {
     return authed ? NextResponse.redirect(new URL("/", req.url)) : NextResponse.next();
   }
