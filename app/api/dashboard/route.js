@@ -1,8 +1,4 @@
-import mongoose from "mongoose";
-import Order from "@/models/Order";
-import Product from "@/models/Product";
-import Task from "@/models/Task";
-import Customer from "@/models/Customer";
+import { db } from "@/lib/db";
 import { route } from "@/lib/api";
 import { getSettings } from "@/lib/settings";
 import { visibilityFilter } from "@/lib/orderService";
@@ -11,129 +7,92 @@ import { TZ, startOfDay, startOfMonth, addDays, addMonths, ymd } from "@/lib/tim
 
 const DAYS = 30;
 
-async function revenue(match) {
-  const [r] = await Order.aggregate([
-    { $match: { ...match, status: { $in: SALE_STAGE_KEYS } } },
-    {
-      $group: {
-        _id: null,
-        revenue: { $sum: "$total" },
-        orders: { $sum: 1 },
-        cost: { $sum: { $sum: { $map: { input: "$items", in: { $multiply: ["$$this.quantity", { $ifNull: ["$$this.costPrice", 0] }] } } } } },
-        items: { $sum: { $sum: "$items.lineTotal" } },
-      },
-    },
-  ]);
-  return { revenue: r?.revenue || 0, orders: r?.orders || 0, cost: r?.cost || 0, items: r?.items || 0 };
-}
-
 export const GET = route(async ({ user }) => {
+  const sql = db();
   const settings = await getSettings();
   const vis = visibilityFilter(user);
+  const sale = sql`o.status in ${sql(SALE_STAGE_KEYS)}`;
   const now = new Date();
   const today = startOfDay(now);
   const monthStart = startOfMonth(now);
   const prevMonthStart = addMonths(monthStart, -1);
   // aceeasi perioada din luna trecuta (pentru comparatie corecta)
-  const elapsed = now.getTime() - monthStart.getTime();
-  const prevSamePeriodEnd = new Date(prevMonthStart.getTime() + elapsed);
+  const prevSamePeriodEnd = new Date(prevMonthStart.getTime() + (now.getTime() - monthStart.getTime()));
   const chartStart = addDays(today, -(DAYS - 1));
-  const uid = new mongoose.Types.ObjectId(String(user.id));
+  const threshold = settings.lowStockThreshold ?? 5;
+
+  const revenue = async (from, to) => {
+    const [r] = await sql`
+      select coalesce(sum(o.total), 0) as revenue, count(*)::int as orders,
+             coalesce(sum(i.cost), 0) as cost, coalesce(sum(i.items), 0) as items
+      from orders o
+      left join lateral (
+        select sum(quantity * coalesce(cost_price, 0)) as cost, sum(line_total) as items from order_items where order_id = o.id
+      ) i on true
+      where ${vis} and ${sale} and o.created_at >= ${from} ${to ? sql`and o.created_at <= ${to}` : sql``}`;
+    return r;
+  };
 
   const [
     todayStats,
     monthStats,
     prevStats,
     statusCounts,
-    debt,
+    [debt],
     series,
     byChannel,
     topProducts,
     topCustomers,
     recentOrders,
     tasks,
-    overdueTasks,
-    stockAgg,
+    [{ overdueTasks }],
+    [stockAgg],
     lowStock,
-    newCustomers,
+    [{ newCustomers }],
   ] = await Promise.all([
-    revenue({ ...vis, createdAt: { $gte: today } }),
-    revenue({ ...vis, createdAt: { $gte: monthStart } }),
-    revenue({ ...vis, createdAt: { $gte: prevMonthStart, $lte: prevSamePeriodEnd } }),
-    Order.aggregate([{ $match: { ...vis, status: { $in: OPEN_STAGE_KEYS } } }, { $group: { _id: { s: "$status", c: "$channel" }, n: { $sum: 1 } } }]),
-    Order.aggregate([
-      { $match: { ...vis, status: { $in: SALE_STAGE_KEYS }, paymentStatus: { $ne: "paid" } } },
-      {
-        $group: {
-          _id: null,
-          amount: { $sum: { $subtract: ["$total", { $ifNull: ["$paidAmount", 0] }] } },
-          orders: { $sum: 1 },
-          overdue: { $sum: { $cond: [{ $and: [{ $ne: ["$dueDate", null] }, { $lt: ["$dueDate", now] }] }, { $subtract: ["$total", { $ifNull: ["$paidAmount", 0] }] }, 0] } },
-        },
-      },
-    ]),
-    Order.aggregate([
-      { $match: { ...vis, status: { $in: SALE_STAGE_KEYS }, createdAt: { $gte: chartStart } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TZ } },
-          revenue: { $sum: "$total" },
-          orders: { $sum: 1 },
-        },
-      },
-    ]),
-    Order.aggregate([
-      { $match: { ...vis, status: { $in: SALE_STAGE_KEYS }, createdAt: { $gte: monthStart } } },
-      { $group: { _id: "$channel", revenue: { $sum: "$total" }, orders: { $sum: 1 } } },
-      { $sort: { revenue: -1 } },
-    ]),
-    Order.aggregate([
-      { $match: { ...vis, status: { $in: SALE_STAGE_KEYS }, createdAt: { $gte: monthStart } } },
-      { $unwind: "$items" },
-      { $group: { _id: "$items.product", name: { $first: "$items.productName" }, unit: { $first: "$items.unit" }, qty: { $sum: "$items.quantity" }, revenue: { $sum: "$items.lineTotal" } } },
-      { $sort: { revenue: -1 } },
-      { $limit: 6 },
-    ]),
-    Order.aggregate([
-      { $match: { ...vis, status: { $in: SALE_STAGE_KEYS }, createdAt: { $gte: monthStart }, customer: { $ne: null } } },
-      { $group: { _id: "$customer", name: { $first: "$customerName" }, revenue: { $sum: "$total" }, orders: { $sum: 1 } } },
-      { $sort: { revenue: -1 } },
-      { $limit: 5 },
-    ]),
-    Order.find(vis)
-      .select("number customerName total status channel createdAt paymentStatus")
-      .sort({ createdAt: -1 })
-      .limit(8)
-      .lean(),
-    Task.find({ assignedTo: uid, status: { $ne: "done" } })
-      .select("title dueDate priority status")
-      .sort({ dueDate: 1, createdAt: -1 })
-      .limit(6)
-      .lean(),
-    Task.countDocuments({ assignedTo: uid, status: { $ne: "done" }, dueDate: { $lt: today } }),
-    Product.aggregate([
-      { $match: { active: { $ne: false } } },
-      {
-        $group: {
-          _id: null,
-          value: { $sum: { $multiply: [{ $sum: "$stock.quantity" }, { $ifNull: ["$price", 0] }] } },
-          cost: { $sum: { $multiply: [{ $sum: "$stock.quantity" }, { $ifNull: ["$costPrice", 0] }] } },
-          products: { $sum: 1 },
-        },
-      },
-    ]),
-    Product.aggregate([
-      { $match: { active: { $ne: false } } },
-      { $project: { name: 1, unit: 1, sku: 1, total: { $sum: "$stock.quantity" }, limit: { $ifNull: ["$minStock", settings.lowStockThreshold ?? 5] } } },
-      { $match: { $expr: { $lte: ["$total", "$limit"] } } },
-      { $sort: { total: 1 } },
-      { $facet: { items: [{ $limit: 8 }], count: [{ $count: "n" }] } },
-    ]),
-    Customer.countDocuments({ createdAt: { $gte: monthStart } }),
+    revenue(today),
+    revenue(monthStart),
+    revenue(prevMonthStart, prevSamePeriodEnd),
+    sql`select o.status, o.channel, count(*)::int as n from orders o
+        where ${vis} and o.status in ${sql(OPEN_STAGE_KEYS)} group by o.status, o.channel`,
+    sql`select coalesce(sum(o.total - o.paid_amount), 0) as amount, count(*)::int as orders,
+               coalesce(sum(o.total - o.paid_amount) filter (where o.due_date is not null and o.due_date < now()), 0) as overdue
+        from orders o where ${vis} and ${sale} and o.payment_status <> 'paid'`,
+    sql`select to_char(o.created_at at time zone ${TZ}, 'YYYY-MM-DD') as day, sum(o.total) as revenue, count(*)::int as orders
+        from orders o where ${vis} and ${sale} and o.created_at >= ${chartStart} group by 1`,
+    sql`select o.channel as id, sum(o.total) as revenue, count(*)::int as orders
+        from orders o where ${vis} and ${sale} and o.created_at >= ${monthStart}
+        group by o.channel order by revenue desc`,
+    sql`select i.product_id as id, min(i.product_name) as name, min(i.unit) as unit, sum(i.quantity) as qty, sum(i.line_total) as revenue
+        from order_items i join orders o on o.id = i.order_id
+        where ${vis} and ${sale} and o.created_at >= ${monthStart}
+        group by i.product_id order by revenue desc limit 6`,
+    sql`select o.customer_id as id, min(o.customer_name) as name, sum(o.total) as revenue, count(*)::int as orders
+        from orders o where ${vis} and ${sale} and o.created_at >= ${monthStart} and o.customer_id is not null
+        group by o.customer_id order by revenue desc limit 5`,
+    sql`select o.id, o.number, o.customer_name, o.total, o.status, o.channel, o.created_at, o.payment_status
+        from orders o where ${vis} order by o.created_at desc limit 8`,
+    sql`select id, title, due_date, priority, status from tasks
+        where assigned_to_id = ${user.id} and status <> 'done'
+        order by due_date nulls last, created_at desc limit 6`,
+    sql`select count(*)::int as overdue_tasks from tasks
+        where assigned_to_id = ${user.id} and status <> 'done' and due_date < ${today}`,
+    sql`select coalesce(sum(t.qty * coalesce(p.price, 0)), 0) as value,
+               coalesce(sum(t.qty * coalesce(p.cost_price, 0)), 0) as cost, count(*)::int as products
+        from products p
+        left join lateral (select coalesce(sum(quantity), 0) as qty from stock where product_id = p.id) t on true
+        where p.active`,
+    sql`select p.id, p.name, p.unit, p.sku, t.qty as total, coalesce(p.min_stock, ${threshold}) as "limit",
+               count(*) over () as full_count
+        from products p
+        cross join lateral (select coalesce(sum(quantity), 0) as qty from stock where product_id = p.id) t
+        where p.active and t.qty <= coalesce(p.min_stock, ${threshold})
+        order by t.qty, lower(p.name) limit 8`,
+    sql`select count(*)::int as new_customers from customers where created_at >= ${monthStart}`,
   ]);
 
   // Serie completa pe zile (inclusiv zilele fara vanzari)
-  const byDay = new Map(series.map((s) => [s._id, s]));
+  const byDay = new Map(series.map((s) => [s.day, s]));
   const chart = [];
   for (let i = 0; i < DAYS; i++) {
     const key = ymd(addDays(chartStart, i));
@@ -142,8 +101,8 @@ export const GET = route(async ({ user }) => {
 
   const counts = { new: 0, pending_approval: 0, processing: 0, ready: 0, invoicing: 0, siteNew: 0 };
   for (const c of statusCounts) {
-    counts[c._id.s] = (counts[c._id.s] || 0) + c.n;
-    if (c._id.s === "new" && c._id.c === "site") counts.siteNew += c.n;
+    counts[c.status] = (counts[c.status] || 0) + c.n;
+    if (c.status === "new" && c.channel === "site") counts.siteNew += c.n;
   }
 
   return {
@@ -152,7 +111,7 @@ export const GET = route(async ({ user }) => {
     month: { ...monthStats, profit: monthStats.items - monthStats.cost, avg: monthStats.orders ? monthStats.revenue / monthStats.orders : 0 },
     prevMonth: prevStats,
     counts,
-    debt: debt[0] || { amount: 0, orders: 0, overdue: 0 },
+    debt,
     chart,
     byChannel,
     topProducts,
@@ -160,8 +119,8 @@ export const GET = route(async ({ user }) => {
     recentOrders,
     tasks,
     overdueTasks,
-    stock: stockAgg[0] || { value: 0, cost: 0, products: 0 },
-    lowStock: { items: lowStock[0]?.items || [], count: lowStock[0]?.count?.[0]?.n || 0 },
+    stock: stockAgg,
+    lowStock: { items: lowStock.map(({ fullCount, ...p }) => p), count: lowStock[0]?.fullCount || 0 },
     newCustomers,
   };
 });

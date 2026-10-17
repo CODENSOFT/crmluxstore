@@ -1,5 +1,4 @@
-import Webhook from "@/models/Webhook";
-import WebhookDelivery from "@/models/WebhookDelivery";
+import { db, isUuid } from "@/lib/db";
 import { route, readJson, badRequest } from "@/lib/api";
 import { generateSecret } from "@/lib/apiKeys";
 import { logAudit } from "@/lib/audit";
@@ -7,10 +6,13 @@ import { cleanEvents } from "@/lib/webhooks";
 
 export const GET = route(
   async ({ query }) => {
-    if (query.get("deliveries")) {
-      return WebhookDelivery.find({ webhook: query.get("deliveries") }).sort({ createdAt: -1 }).limit(50).lean();
+    const sql = db();
+    const d = query.get("deliveries");
+    if (d) {
+      if (!isUuid(d)) return [];
+      return sql`select *, webhook_id as webhook from webhook_deliveries where webhook_id = ${d} order by created_at desc limit 50`;
     }
-    return Webhook.find().sort({ createdAt: -1 }).lean();
+    return sql`select * from webhooks order by created_at desc`;
   },
   { auth: "admin" }
 );
@@ -20,13 +22,14 @@ export const POST = route(
     const b = await readJson(req);
     if (!b.name?.trim()) throw badRequest("Numele este obligatoriu");
     if (!/^https?:\/\//.test(b.url || "")) throw badRequest("URL-ul trebuie să înceapă cu https://");
-    const hook = await Webhook.create({
+    const sql = db();
+    const [hook] = await sql`insert into webhooks ${sql({
       name: b.name.trim(),
       url: b.url.trim(),
       events: cleanEvents(b.events),
       secret: generateSecret(),
-      createdBy: user.id,
-    });
+      createdById: user.id,
+    })} returning *`;
     await logAudit({ action: "webhook_saved", category: "integration", entityName: hook.name, user, details: hook.url });
     return hook;
   },

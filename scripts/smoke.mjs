@@ -1,6 +1,6 @@
 // Test complet end-to-end al API-ului (comenzi, stoc, aprobari, plati, inventariere, API v1 / 1C, webhook site).
 // ATENTIE: ruleaza DOAR pe o baza de date de test goala (creeaza si sterge date).
-//   1) porniti serverul cu o baza de test:  MONGODB_URI=mongodb://localhost:27017/crm-test npm run dev
+//   1) porniti serverul cu o baza de test:  POSTGRES_URL=postgres://postgres:postgres@localhost:5432/crm_test npm run dev
 //   2) B=http://localhost:3030 node scripts/smoke.mjs
 import crypto from "node:crypto";
 const B = process.env.B || "http://localhost:3031";

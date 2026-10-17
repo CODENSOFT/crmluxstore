@@ -97,8 +97,8 @@ Răspunsul raportează fiecare element separat (un element greșit nu blochează
   "data": {
     "total": 3, "created": 1, "updated": 1, "errors": 1,
     "results": [
-      { "index": 0, "status": "updated", "id": "6ad3…", "externalId": "8f2c…", "sku": "KC-GS-11" },
-      { "index": 1, "status": "created", "id": "6ad4…", "externalId": "91aa…", "sku": "FOX-FOAM-5" },
+      { "index": 0, "status": "updated", "id": "7c41…", "externalId": "8f2c…", "sku": "KC-GS-11" },
+      { "index": 1, "status": "created", "id": "9e02…", "externalId": "91aa…", "sku": "FOX-FOAM-5" },
       { "index": 2, "status": "error", "error": "Câmpul „name” este obligatoriu pentru produse noi", "sku": "X-1" }
     ]
   }
@@ -129,6 +129,8 @@ Răspunsul raportează fiecare element separat (un element greșit nu blochează
 | Client | `externalId` → `idno` → telefon → email | UUID contragentului, IDNO |
 | Furnizor | `externalId` → `idno` → denumire | UUID contragentului |
 | Comandă | `id` CRM, `number` (CMD-000123) sau `externalId` | — |
+
+Identificatorii interni ai CRM (`id`, `productId`, `warehouseId`, `customer.id` …) sunt **UUID** (șir de 36 de caractere, ex: `3f6c1d2e-8a4b-4c9e-9f1a-2b7d5e8c4a10`) — în 1C se păstrează ca `Строка(36)`.
 
 La prima sincronizare, produsele deja existente în CRM se leagă automat după SKU / cod de bare și primesc `externalId`. Din acel moment, potrivirea se face după `externalId`.
 
@@ -219,9 +221,9 @@ Rulați din 1C o **sarcină programată** (Регламентное задани
 `GET /products?updatedSince=2026-10-01T00:00:00Z&limit=500` — produsele cu stoc pe depozite:
 
 ```json
-{ "id": "6ad3…", "externalId": "8f2c…", "sku": "KC-GS-11", "name": "Koch-Chemie Green Star 11 kg",
+{ "id": "7c41…", "externalId": "8f2c…", "sku": "KC-GS-11", "name": "Koch-Chemie Green Star 11 kg",
   "unit": "bucata", "price": 1450, "wholesalePrice": 1300, "costPrice": 980,
-  "stock": [ { "warehouseId": "6ad1…", "warehouseCode": "DEP-1", "warehouseExternalId": "a1b2…", "quantity": 100 } ],
+  "stock": [ { "warehouseId": "2b5d…", "warehouseCode": "DEP-1", "warehouseExternalId": "a1b2…", "quantity": 100 } ],
   "totalStock": 100, "active": true, "updatedAt": "2026-10-17T09:12:00.000Z" }
 ```
 
@@ -257,18 +259,18 @@ Rulați din 1C o **sarcină programată** (Регламентное задани
 
 ```json
 {
-  "id": "6ad380c95c05ca98724015b8",
+  "id": "3f6c1d2e-8a4b-4c9e-9f1a-2b7d5e8c4a10",
   "number": "CMD-000124",
   "status": "processing",
   "statusLabel": "În pregătire",
   "channel": "site",
   "createdAt": "2026-10-17T07:05:41.000Z",
   "currency": "MDL",
-  "customer": { "id": "6ad3…", "externalId": "d5e6…", "name": "SRL AquaWash Self-Service", "idno": "1003600012345", "phone": "+373 69 123 456" },
+  "customer": { "id": "7c41…", "externalId": "d5e6…", "name": "SRL AquaWash Self-Service", "idno": "1003600012345", "phone": "+373 69 123 456" },
   "priceType": "wholesale",
   "items": [
-    { "productId": "6ad3…", "productExternalId": "8f2c…", "sku": "KC-GS-11", "name": "Koch-Chemie Green Star 11 kg",
-      "warehouseId": "6ad1…", "warehouseCode": "DEP-1", "warehouseExternalId": "a1b2…",
+    { "productId": "7c41…", "productExternalId": "8f2c…", "sku": "KC-GS-11", "name": "Koch-Chemie Green Star 11 kg",
+      "warehouseId": "2b5d…", "warehouseCode": "DEP-1", "warehouseExternalId": "a1b2…",
       "quantity": 10, "unit": "bucata", "unitPrice": 1300, "discount": 5, "lineTotal": 12350, "vatRate": 20 }
   ],
   "subtotal": 12350, "deliveryCost": 150, "vatTotal": 2083.33, "total": 12500,

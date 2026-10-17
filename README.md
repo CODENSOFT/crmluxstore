@@ -4,7 +4,7 @@ CRM pentru **Lux Store** (luxstore.md, Chișinău) — magazin de chimie auto, s
 
 Comenzi din magazin, site, telefon și B2B · clienți și condiții comerciale · stoc pe depozite cu registru complet · recepții, transferuri, casări, inventariere · plăți și datorii · rapoarte · integrare directă cu site-ul (WooCommerce) și pregătire completă pentru 1C — **fără Make sau alte servicii intermediare**.
 
-Construit cu **Next.js 16 (App Router) + MongoDB (Mongoose) + Tailwind CSS 4**, găzduit pe Vercel.
+Construit cu **Next.js 16 (App Router) + Postgres (Supabase) + Tailwind CSS 4**, găzduit pe Vercel.
 
 ---
 
@@ -33,15 +33,15 @@ Extra: căutare globală **Ctrl/⌘ + K**, tasta **N** = comandă nouă, temă l
 
 ```bash
 npm install
-cp .env.example .env.local    # completați MONGODB_URI și JWT_SECRET
+cp .env.example .env.local    # completați POSTGRES_URL și JWT_SECRET
 npm run dev                   # http://localhost:3030
 ```
 
-La prima pornire se creează automat contul de administrator (din `SEED_ADMIN_*`), categoriile magazinului și un depozit implicit.
+La prima pornire se creează automat **schema bazei de date** (tabele, indexuri, securitate RLS), contul de administrator (din `SEED_ADMIN_*`), categoriile magazinului și un depozit implicit. Nu există pași manuali de migrare.
 
 | Variabilă | Rol |
 |---|---|
-| `MONGODB_URI` | Baza de date MongoDB (Atlas) |
+| `POSTGRES_URL` | Baza de date Postgres (Supabase) — setată automat de integrarea Supabase din Vercel. Acceptă și `DATABASE_URL`. |
 | `JWT_SECRET` | Secret pentru sesiuni |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME` | Contul de admin creat la prima pornire |
 | `CRM_API_KEY` | Opțional — cheie API „master” (de preferat cheile create din Integrări) |
@@ -51,16 +51,14 @@ La prima pornire se creează automat contul de administrator (din `SEED_ADMIN_*`
 
 ---
 
-## Trecerea de la versiunea veche (date existente)
+## Baza de date (Supabase)
 
-După publicare, rulați o singură dată migrarea (completează câmpurile noi, creează fișe de client din numele de pe comenzile vechi, numerotează documentele de stoc și pune soldul inițial în registrul de stoc):
+Pe Vercel: proiectul **crmluxstore** → **Storage → Create Database → Supabase** (regiunea **Frankfurt, eu-central-1**, aproape de funcțiile Vercel `fra1`) → conectați la toate mediile. Integrarea adaugă singură `POSTGRES_URL` și celelalte variabile; la următorul deploy CRM-ul creează tabelele și contul de admin.
 
-```bash
-node --env-file=.env.local scripts/migrate-v2.mjs           # simulare — arată ce se va schimba
-node --env-file=.env.local scripts/migrate-v2.mjs --apply   # aplică
-```
-
-Comenzile vechi cu status „Complet” sunt considerate achitate (versiunea veche nu urmărea plățile).
+- Toate tabelele au **RLS activat** și sunt închise pentru API-ul public Supabase (`anon` / `authenticated`): datele sunt accesibile doar prin CRM.
+- Stocul se modifică **atomic, în tranzacții** (registru `stock_movements` + sold în `stock`), deci două comenzi simultane nu pot vinde aceeași bucată de două ori.
+- Jurnalele tehnice vechi se curăță automat la sincronizarea zilnică.
+- Resetare cont admin (dacă s-a pierdut parola): `node --env-file=.env.local scripts/reset-admin.mjs`
 
 ---
 
@@ -84,9 +82,9 @@ Evenimente (comandă creată / modificată, plată, stoc modificat, produs, clie
 ## Teste
 
 ```bash
-# pe o bază de date de TEST goală:
-MONGODB_URI=mongodb://localhost:27017/crm-test npm run dev
-B=http://localhost:3030 node scripts/smoke.mjs     # ~96 verificări end-to-end
+# pe o bază de date de TEST goală (niciodată pe producție):
+POSTGRES_URL=postgres://postgres:postgres@localhost:5432/crm_test npm run dev
+B=http://localhost:3030 node scripts/smoke.mjs     # ~100 verificări end-to-end
 ```
 
 ---
@@ -102,8 +100,8 @@ app/
   _components/        kit UI (ui, overlay, table, charts, pickers, icons)
 lib/                  logica de business: orderService, stock (registru atomic), stockDocs,
                       pricing, customers, woo, apiV1, openapi, events (webhook-uri), dto
-models/               schemele Mongoose
+lib/db.js, schema.js  conexiunea Postgres (postgres.js) și schema SQL (aplicată automat)
 public/docs/          documentația pentru integrarea 1C
-scripts/              migrare v2, test end-to-end, resetare admin
+scripts/              test end-to-end, resetare admin
 proxy.js              protecția paginilor (sesiune)
 ```

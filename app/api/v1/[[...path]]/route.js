@@ -1,4 +1,4 @@
-import connectDB from "@/lib/mongodb";
+import { connectDB } from "@/lib/db";
 import { authenticateApiKey } from "@/lib/apiKeys";
 import { matchRoute, logApiCall } from "@/lib/apiV1";
 import { errorResponse } from "@/lib/api";

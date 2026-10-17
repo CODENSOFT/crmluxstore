@@ -1,4 +1,4 @@
-import connectDB from "@/lib/mongodb";
+import { connectDB } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { verifyWooSignature, importWooOrder } from "@/lib/woo";
 import { logIntegration } from "@/lib/integrationLog";

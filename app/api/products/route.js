@@ -1,8 +1,7 @@
-import mongoose from "mongoose";
-import Product from "@/models/Product";
-import { route, readJson, pagination } from "@/lib/api";
+import { db } from "@/lib/db";
+import { route, readJson, pagination, badRequest } from "@/lib/api";
 import { getSettings } from "@/lib/settings";
-import { listProducts, pickProductFields, buildComponents, assertUniqueSku } from "@/lib/products";
+import { listProducts, pickProductFields, buildComponents, assertUniqueSku, stockJson } from "@/lib/products";
 import { applyMovements } from "@/lib/stock";
 import { logAudit } from "@/lib/audit";
 import { emit } from "@/lib/events";
@@ -14,12 +13,12 @@ import { UNIT_LABELS } from "@/lib/constants";
 // ?light=1 -> toate produsele active, campuri minime (pentru selectoare in formulare)
 export const GET = route(async ({ query }) => {
   const settings = await getSettings();
+  const sql = db();
   if (query.get("light") === "1") {
-    const list = await Product.find({ active: { $ne: false } })
-      .select("name sku barcode unit price wholesalePrice costPrice stock category brand packaging isComposite")
-      .sort({ name: 1 })
-      .lean();
-    return list;
+    return sql`
+      select p.id, p.name, p.sku, p.barcode, p.unit, p.price, p.wholesale_price, p.cost_price, p.category_id as category,
+             p.brand, p.packaging, p.is_composite, ${stockJson(sql)} as stock
+      from products p where p.active order by lower(p.name)`;
   }
   const { page, limit, skip } = pagination(query, { defLimit: 50, maxLimit: 2000 });
   const opts = {
@@ -53,25 +52,25 @@ export const GET = route(async ({ query }) => {
       `produse_${new Date().toISOString().slice(0, 10)}.csv`
     );
   }
-  const { items, total } = await listProducts({ ...opts, skip, limit });
-  const brands = await Product.distinct("brand", { brand: { $nin: [null, ""] } });
-  return { items, total, page, limit, brands: brands.sort() };
+  const [{ items, total }, brands] = await Promise.all([
+    listProducts({ ...opts, skip, limit }),
+    sql`select distinct brand from products where brand is not null and brand <> '' order by brand`,
+  ]);
+  return { items, total, page, limit, brands: brands.map((b) => b.brand) };
 });
 
 export const POST = route(async ({ req, user }) => {
   const body = await readJson(req);
+  const sql = db();
   const fields = pickProductFields(body);
-  if (!fields.name) fields.name = "";
+  if (!fields.name) throw badRequest("Denumirea produsului este obligatorie");
   await assertUniqueSku(fields.sku);
-  const _id = new mongoose.Types.ObjectId();
   const isComposite = !!body.isComposite;
-  const created = await Product.create({
-    _id,
-    ...fields,
-    unit: fields.unit || "bucata",
-    isComposite,
-    components: isComposite ? await buildComponents(body.components, _id) : [],
-  });
+  const [created] = await sql`insert into products ${sql({ unit: "bucata", ...fields, isComposite })} returning id, name, price`;
+  if (isComposite) {
+    const components = await buildComponents(body.components, created._id);
+    await sql`update products set components = ${sql.json(components)} where id = ${created._id}`;
+  }
 
   // Stoc initial: [{ warehouse, quantity }] (sau warehouse + quantity, compatibilitate)
   const initial = Array.isArray(body.initialStock)
@@ -81,8 +80,8 @@ export const POST = route(async ({ req, user }) => {
       : [];
   const lines = initial
     .filter((s) => s.warehouse && Number(s.quantity) > 0)
-    .map((s) => ({ product: _id, warehouse: s.warehouse, qty: Number(s.quantity), type: "initial", unitCost: fields.costPrice }));
-  if (lines.length) await applyMovements(lines, { refType: "Product", refId: _id, user, note: "Stoc inițial la creare" });
+    .map((s) => ({ product: created._id, warehouse: s.warehouse, qty: Number(s.quantity), type: "initial", unitCost: fields.costPrice }));
+  if (lines.length) await applyMovements(lines, { refType: "Product", refId: created._id, user, note: "Stoc inițial la creare" });
 
   await logAudit({
     action: "product_created",
@@ -92,7 +91,8 @@ export const POST = route(async ({ req, user }) => {
     user,
     details: `„${created.name}” · preț ${created.price}${lines.length ? ` · stoc inițial ${lines.reduce((s, l) => s + l.qty, 0)}` : ""}`,
   });
-  const fresh = await Product.findById(_id).lean();
+  const [fresh] = await sql`select p.*, ${stockJson(sql)} as stock from products p where p.id = ${created._id}`;
+  delete fresh.photo;
   emit("product.created", () => productDTO(fresh));
   return fresh;
 });

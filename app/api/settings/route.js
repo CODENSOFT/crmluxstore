@@ -1,30 +1,40 @@
+import { db, isUuid } from "@/lib/db";
 import { route, readJson, badRequest } from "@/lib/api";
-import { getSettingsDoc, invalidateSettings } from "@/lib/settings";
+import { getSettings, updateSettings } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 
 const COMPANY = ["companyName", "legalName", "idno", "vatCode", "iban", "bank", "bankCode", "address", "phone", "email", "website"];
-const SALES = ["currency", "vatPayer", "vatRate", "pricesIncludeVat", "requireApproval", "lowStockThreshold", "invoiceTerms", "publicUrl"];
+
 
 function publicView(s) {
-  const o = s.toObject();
-  delete o.woo;
-  return o;
+  const { woo, ...rest } = s;
+  return rest;
 }
 
-export const GET = route(async () => publicView(await getSettingsDoc()));
+export const GET = route(async () => publicView(await getSettings({ fresh: true })));
 
 export const PUT = route(
   async ({ req, user }) => {
     const body = await readJson(req);
-    const s = await getSettingsDoc();
-    for (const f of [...COMPANY, ...SALES]) if (body[f] !== undefined) s[f] = body[f];
+    const patch = {};
+    for (const f of COMPANY) if (body[f] !== undefined) patch[f] = String(body[f] ?? "").trim();
+    for (const f of ["currency", "invoiceTerms"]) if (body[f] !== undefined) patch[f] = String(body[f] ?? "");
+    if (body.publicUrl !== undefined) patch.publicUrl = String(body.publicUrl || "").trim().replace(/\/+$/, "");
+    for (const f of ["vatPayer", "pricesIncludeVat", "requireApproval"]) if (body[f] !== undefined) patch[f] = !!body[f];
     if (body.vatRate !== undefined) {
       const v = Number(body.vatRate);
       if (!(v >= 0 && v <= 100)) throw badRequest("Cota TVA invalidă");
-      s.vatRate = v;
+      patch.vatRate = v;
     }
-    if (body.lowStockThreshold !== undefined) s.lowStockThreshold = Math.max(0, Number(body.lowStockThreshold) || 0);
-    if (body.defaultWarehouse !== undefined) s.defaultWarehouse = body.defaultWarehouse || undefined;
+    if (body.lowStockThreshold !== undefined) patch.lowStockThreshold = Math.max(0, Number(body.lowStockThreshold) || 0);
+    if (body.defaultWarehouse !== undefined) {
+      const w = body.defaultWarehouse || null;
+      if (w) {
+        const [exists] = isUuid(String(w)) ? await db()`select id from warehouses where id = ${w}` : [];
+        if (!exists) throw badRequest("Depozit inexistent");
+      }
+      patch.defaultWarehouse = w;
+    }
     if (Array.isArray(body.deliveryMethods)) {
       const methods = body.deliveryMethods
         .filter((m) => m && String(m.label || "").trim())
@@ -35,10 +45,10 @@ export const PUT = route(
           active: m.active !== false,
         }));
       if (!methods.length) throw badRequest("Păstrați cel puțin o metodă de livrare");
-      s.deliveryMethods = methods;
+      patch.deliveryMethods = methods;
     }
-    await s.save();
-    invalidateSettings();
+
+    const s = await updateSettings(patch);
     await logAudit({ action: "settings_saved", category: "settings", user, details: Object.keys(body).join(", ") });
     return publicView(s);
   },

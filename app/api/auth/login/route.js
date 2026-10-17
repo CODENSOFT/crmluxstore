@@ -1,4 +1,4 @@
-import User from "@/models/User";
+import { db } from "@/lib/db";
 import { verifyPassword, setSession } from "@/lib/auth";
 import { route, readJson, fail } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
@@ -22,18 +22,21 @@ export const POST = route(
     const key = `${ip}|${String(email).toLowerCase()}`;
     if (tooMany(key)) return fail("Prea multe încercări. Reîncercați peste câteva minute.", 429);
 
-    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
+    const [user] = await db()`select * from users where lower(email) = ${String(email).toLowerCase().trim()}`;
     const valid = user && user.active && (await verifyPassword(password, user.passwordHash));
     if (!valid) {
       attempts.get(key).push(Date.now());
       return fail("Email sau parolă incorecte", 401);
     }
     attempts.delete(key);
-    user.lastLoginAt = new Date();
-    await user.save();
-    await setSession({ id: String(user._id), name: user.name, email: user.email, role: user.role });
+    await db()`update users set last_login_at = now() where id = ${user._id}`;
+    await setSession({ id: user._id, name: user.name, email: user.email, role: user.role });
     await logAudit({ action: "login", category: "user", entity: user, entityName: user.name, user: { id: user._id, name: user.name, role: user.role } });
-    return user.toSafeJSON();
+    return safeUser(user);
   },
   { auth: false }
 );
+
+function safeUser(u) {
+  return { _id: u._id, name: u.name, email: u.email, role: u.role, phone: u.phone, position: u.position, active: u.active };
+}

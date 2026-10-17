@@ -1,6 +1,4 @@
-import mongoose from "mongoose";
-import Order from "@/models/Order";
-import Warehouse from "@/models/Warehouse";
+import { db } from "@/lib/db";
 import { route } from "@/lib/api";
 import { getSettings } from "@/lib/settings";
 import { listProducts } from "@/lib/products";
@@ -13,7 +11,8 @@ import { UNIT_LABELS } from "@/lib/constants";
 export const GET = route(async ({ query }) => {
   const settings = await getSettings();
   const view = query.get("view");
-  const warehouses = await Warehouse.find({ active: { $ne: false } }).sort({ isDefault: -1, name: 1 }).lean();
+  const sql = db();
+  const warehouses = await sql`select * from warehouses where active order by is_default desc, lower(name)`;
   const { items } = await listProducts({
     q: query.get("q") || "",
     category: query.get("category") || "",
@@ -43,14 +42,15 @@ export const GET = route(async ({ query }) => {
 
   if (view === "reorder") {
     rows = rows.filter((r) => r.stockStatus !== "in");
-    const ids = rows.map((r) => new mongoose.Types.ObjectId(String(r._id)));
-    const since = new Date(Date.now() - 30 * 86400000);
-    const sales = await Order.aggregate([
-      { $match: { status: { $in: SALE_STAGE_KEYS }, createdAt: { $gte: since }, "items.product": { $in: ids } } },
-      { $unwind: "$items" },
-      { $match: { "items.product": { $in: ids } } },
-      { $group: { _id: "$items.product", qty: { $sum: "$items.quantity" } } },
-    ]);
+    const ids = rows.map((r) => r._id);
+    const sales = ids.length
+      ? await sql`
+          select i.product_id as id, sum(i.quantity) as qty
+          from order_items i join orders o on o.id = i.order_id
+          where o.status in ${sql(SALE_STAGE_KEYS)} and o.created_at >= now() - interval '30 days'
+            and i.product_id in ${sql(ids)}
+          group by i.product_id`
+      : [];
     const sold = new Map(sales.map((s) => [String(s._id), s.qty]));
     rows = rows
       .map((r) => {

@@ -1,14 +1,8 @@
-import Transfer from "@/models/Transfer";
 import { route, notFound } from "@/lib/api";
-import { docLines } from "@/lib/dto";
+import { getDoc } from "@/lib/stockDocsQuery";
 
 export const GET = route(async ({ params }) => {
-  const d = await Transfer.findById(params.id)
-    .populate("fromWarehouse", "name address")
-    .populate("toWarehouse", "name address")
-    .populate("createdBy", "name")
-    .populate("product", "name unit")
-    .lean();
+  const d = await getDoc("transfers", params.id);
   if (!d) throw notFound("Transferul nu există");
-  return { ...d, items: docLines(d) };
+  return d;
 });

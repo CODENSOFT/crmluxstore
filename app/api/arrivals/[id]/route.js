@@ -1,14 +1,8 @@
-import StockArrival from "@/models/StockArrival";
 import { route, notFound } from "@/lib/api";
-import { docLines } from "@/lib/dto";
+import { getDoc } from "@/lib/stockDocsQuery";
 
 export const GET = route(async ({ params }) => {
-  const d = await StockArrival.findById(params.id)
-    .populate("warehouse", "name address")
-    .populate("supplierId", "name idno phone")
-    .populate("createdBy", "name")
-    .populate("product", "name unit")
-    .lean();
+  const d = await getDoc("arrivals", params.id);
   if (!d) throw notFound("Recepția nu există");
-  return { ...d, items: docLines(d) };
+  return d;
 });

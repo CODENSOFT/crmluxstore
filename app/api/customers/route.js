@@ -1,46 +1,51 @@
-import Customer from "@/models/Customer";
-import { route, readJson, pagination, escapeRegex, normPhone } from "@/lib/api";
-import { createCustomer, findCustomerMatch } from "@/lib/customers";
+import { db, likeOf, where } from "@/lib/db";
+import { route, readJson, pagination, normPhone } from "@/lib/api";
+import { CUSTOMER_COLS, createCustomer, findCustomerMatch } from "@/lib/customers";
 import { logAudit } from "@/lib/audit";
 import { emit } from "@/lib/events";
 import { customerDTO } from "@/lib/dto";
 import { csvResponse } from "@/lib/csv";
 import { segmentLabel } from "@/lib/constants";
 
-// ?q=&segment=&type=&debt=1&sort=&page=&limit=   (?light=1 -> lista scurta pentru selectoare)
-export const GET = route(async ({ query }) => {
-  const filter = {};
+const SORTS = {
+  name: "lower(c.name) asc",
+  "-spent": "c.total_spent desc",
+  "-balance": "c.balance desc",
+  "-last": "c.last_order_at desc nulls last",
+  "-createdAt": "c.created_at desc",
+};
+
+function filters(query) {
+  const sql = db();
+  const conds = [];
   const q = query.get("q")?.trim();
   if (q) {
-    const rx = { $regex: escapeRegex(q), $options: "i" };
+    const l = likeOf(q);
     const pn = normPhone(q);
-    filter.$or = [{ name: rx }, { contactPerson: rx }, { email: rx }, { idno: rx }, { number: rx }, { phone: rx }];
-    if (pn && pn.length >= 4) filter.$or.push({ phoneNorm: { $regex: escapeRegex(pn) } });
+    conds.push(sql`(c.name ilike ${l} or c.contact_person ilike ${l} or c.email ilike ${l} or c.idno ilike ${l}
+                    or c.number ilike ${l} or c.phone ilike ${l} ${pn && pn.length >= 4 ? sql`or c.phone_norm like ${likeOf(pn)}` : sql``})`);
   }
-  if (query.get("segment")) filter.segment = query.get("segment");
-  if (query.get("type")) filter.type = query.get("type");
-  if (query.get("debt") === "1") filter["stats.balance"] = { $gt: 0 };
-  if (query.get("active") !== "all") filter.active = { $ne: false };
+  if (query.get("segment")) conds.push(sql`c.segment = ${query.get("segment")}`);
+  if (query.get("type")) conds.push(sql`c.type = ${query.get("type")}`);
+  if (query.get("debt") === "1") conds.push(sql`c.balance > 0`);
+  if (query.get("active") !== "all") conds.push(sql`c.active`);
+  return where(conds);
+}
 
+// ?q=&segment=&type=&debt=1&sort=&page=&limit=   (?light=1 -> lista scurta pentru selectoare)
+export const GET = route(async ({ query }) => {
+  const sql = db();
+  const w = filters(query);
   if (query.get("light") === "1") {
-    return Customer.find(filter)
-      .select("number name type phone email idno segment priceType discount city address paymentTermDays")
-      .sort({ "stats.lastOrderAt": -1, name: 1 })
-      .limit(Number(query.get("limit")) || 30)
-      .lean();
+    return sql`
+      select c.id, c.number, c.name, c.type, c.phone, c.email, c.idno, c.segment, c.price_type, c.discount, c.city, c.address, c.payment_term_days
+      from customers c where ${w}
+      order by c.last_order_at desc nulls last, lower(c.name) limit ${Math.min(100, Number(query.get("limit")) || 30)}`;
   }
-
-  const sorts = {
-    name: { name: 1 },
-    "-spent": { "stats.totalSpent": -1 },
-    "-balance": { "stats.balance": -1 },
-    "-last": { "stats.lastOrderAt": -1 },
-    "-createdAt": { createdAt: -1 },
-  };
-  const sort = sorts[query.get("sort")] || { createdAt: -1 };
+  const order = sql.unsafe(SORTS[query.get("sort")] || SORTS["-createdAt"]);
 
   if (query.get("format") === "csv") {
-    const list = await Customer.find(filter).sort(sort).lean();
+    const list = await sql`select ${sql.unsafe(CUSTOMER_COLS)} from customers c where ${w} order by ${order}`;
     return csvResponse(
       list.map((c) => ({
         Cod: c.number || "",
@@ -62,15 +67,17 @@ export const GET = route(async ({ query }) => {
   }
 
   const { page, limit, skip } = pagination(query, { defLimit: 50 });
-  const [items, total, sums] = await Promise.all([
-    Customer.find(filter).populate("manager", "name").sort(sort).skip(skip).limit(limit).lean(),
-    Customer.countDocuments(filter),
-    Customer.aggregate([
-      { $match: filter },
-      { $group: { _id: null, spent: { $sum: "$stats.totalSpent" }, debt: { $sum: "$stats.balance" }, b2b: { $sum: { $cond: [{ $eq: ["$type", "company"] }, 1, 0] } } } },
-    ]),
+  const [items, [summary]] = await Promise.all([
+    sql`
+      select ${sql.unsafe(CUSTOMER_COLS)},
+        (select json_build_object('_id', u.id, 'name', u.name) from users u where u.id = c.manager_id) as manager,
+        count(*) over () as full_count
+      from customers c where ${w} order by ${order}, c.id limit ${limit} offset ${skip}`,
+    sql`select coalesce(sum(c.total_spent), 0) as spent, coalesce(sum(c.balance), 0) as debt,
+               count(*) filter (where c.type = 'company')::int as b2b
+        from customers c where ${w}`,
   ]);
-  return { items, total, page, limit, summary: sums[0] || { spent: 0, debt: 0, b2b: 0 } };
+  return { items: items.map(({ fullCount, ...c }) => c), total: items[0]?.fullCount || 0, page, limit, summary };
 });
 
 export const POST = route(async ({ req, user }) => {
@@ -86,6 +93,6 @@ export const POST = route(async ({ req, user }) => {
   }
   const created = await createCustomer({ ...body, manager: body.manager || user.id });
   await logAudit({ action: "customer_created", category: "customer", entity: created, entityName: created.name, user });
-  emit("customer.created", () => customerDTO(created.toObject()));
+  emit("customer.created", customerDTO(created));
   return created;
 });

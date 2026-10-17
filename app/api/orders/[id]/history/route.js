@@ -1,19 +1,19 @@
-import AuditLog from "@/models/AuditLog";
-import Order from "@/models/Order";
-import StockMovement from "@/models/StockMovement";
+import { db } from "@/lib/db";
 import { route } from "@/lib/api";
 import { AUDIT_LABELS } from "@/lib/audit";
-import { assertCanView } from "@/lib/orderService";
+import { assertCanView, loadOrderRow } from "@/lib/orderService";
 
 export const GET = route(async ({ params, user }) => {
-  const order = await Order.findById(params.id).select("createdBy responsible status channel").lean();
+  const order = await loadOrderRow(params.id);
   assertCanView(order, user);
-  const [items, movements] = await Promise.all([
-    AuditLog.find({ order: params.id }).sort({ createdAt: -1 }).lean(),
-    StockMovement.find({ refId: params.id }).populate("warehouse", "name").sort({ createdAt: -1 }).lean(),
+  const sql = db();
+  const [events, movements] = await Promise.all([
+    sql`select * from audit_logs where order_id = ${order._id} order by created_at desc`,
+    sql`select m.*, (select json_build_object('_id', w.id, 'name', w.name) from warehouses w where w.id = m.warehouse_id) as warehouse
+        from stock_movements m where m.ref_id = ${order._id} order by m.created_at desc`,
   ]);
   return {
-    events: items.map((a) => ({
+    events: events.map((a) => ({
       _id: a._id,
       action: a.action,
       label: AUDIT_LABELS[a.action] || a.action,
