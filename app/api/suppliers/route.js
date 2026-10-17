@@ -1,61 +1,37 @@
-import connectDB from "@/lib/mongodb";
 import Supplier from "@/models/Supplier";
 import StockArrival from "@/models/StockArrival";
-import { ok, fail, requireUser } from "@/lib/api";
+import { route, readJson, badRequest, escapeRegex } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
+import { pickSupplier } from "@/lib/suppliers";
 
-export async function GET() {
-  const { response } = await requireUser();
-  if (response) return response;
-  await connectDB();
-
+export const GET = route(async ({ query }) => {
+  const filter = query.get("all") === "1" ? {} : { active: { $ne: false } };
+  if (query.get("q")) filter.name = { $regex: escapeRegex(query.get("q")), $options: "i" };
   const [suppliers, agg] = await Promise.all([
-    Supplier.find().sort({ createdAt: -1 }),
+    Supplier.find(filter).sort({ name: 1 }).lean(),
     StockArrival.aggregate([
       { $match: { supplierId: { $ne: null } } },
       {
         $group: {
           _id: "$supplierId",
           arrivals: { $sum: 1 },
-          totalQty: { $sum: "$quantity" },
-          totalCost: {
-            $sum: {
-              $multiply: ["$quantity", { $ifNull: ["$unitCost", 0] }],
-            },
-          },
+          total: { $sum: { $ifNull: ["$total", { $multiply: [{ $ifNull: ["$quantity", 0] }, { $ifNull: ["$unitCost", 0] }] }] } },
+          last: { $max: "$createdAt" },
         },
       },
     ]),
   ]);
-
-  const stats = Object.fromEntries(agg.map((a) => [String(a._id), a]));
-  return ok(
-    suppliers.map((s) => {
-      const st = stats[String(s._id)] || {};
-      return {
-        ...s.toObject(),
-        arrivals: st.arrivals || 0,
-        totalQty: st.totalQty || 0,
-        totalCost: +(st.totalCost || 0).toFixed(2),
-      };
-    })
-  );
-}
-
-export async function POST(req) {
-  const { user, response } = await requireUser();
-  if (response) return response;
-  await connectDB();
-  const { name, phone, email, address, note } = await req.json();
-  if (!name) return fail("Numele furnizorului este obligatoriu");
-  const created = await Supplier.create({ name, phone, email, address, note });
-  await logAudit({
-    action: "supplier_created",
-    category: "supplier",
-    entity: created,
-    entityName: created.name,
-    user,
-    details: `Furnizor "${created.name}"`,
+  const stats = new Map(agg.map((a) => [String(a._id), a]));
+  return suppliers.map((s) => {
+    const st = stats.get(String(s._id));
+    return { ...s, stats: { arrivals: st?.arrivals || 0, total: st?.total || 0, lastArrivalAt: st?.last || null } };
   });
-  return ok(created, { status: 201 });
-}
+});
+
+export const POST = route(async ({ req, user }) => {
+  const body = pickSupplier(await readJson(req));
+  if (!body.name?.trim()) throw badRequest("Numele furnizorului este obligatoriu");
+  const created = await Supplier.create(body);
+  await logAudit({ action: "supplier_created", category: "supplier", entity: created, entityName: created.name, user });
+  return created;
+});

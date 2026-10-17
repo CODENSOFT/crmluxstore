@@ -1,27 +1,18 @@
-import connectDB from "@/lib/mongodb";
 import Notification from "@/models/Notification";
-import { ok, fail, requireUser } from "@/lib/api";
+import { route, readJson, notFound } from "@/lib/api";
 
-// Marcheaza o notificare drept citita
-export async function PATCH(req, { params }) {
-  const { user, response } = await requireUser();
-  if (response) return response;
-  await connectDB();
-  const { id } = await params;
+export const PATCH = route(async ({ req, params, user }) => {
+  const { read = true } = await readJson(req);
   const n = await Notification.findOneAndUpdate(
-    { _id: id, recipient: user.id },
-    { $set: { read: true } },
-    { new: true }
+    { _id: params.id, recipient: user.id },
+    { $set: { read: !!read } },
+    { returnDocument: "after" }
   );
-  if (!n) return fail("Notificare inexistenta", 404);
-  return ok(n);
-}
+  if (!n) throw notFound("Notificarea nu există");
+  return n;
+});
 
-export async function DELETE(req, { params }) {
-  const { user, response } = await requireUser();
-  if (response) return response;
-  await connectDB();
-  const { id } = await params;
-  await Notification.findOneAndDelete({ _id: id, recipient: user.id });
-  return ok({ deleted: true });
-}
+export const DELETE = route(async ({ params, user }) => {
+  await Notification.findOneAndDelete({ _id: params.id, recipient: user.id });
+  return { deleted: true };
+});

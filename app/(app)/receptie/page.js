@@ -1,219 +1,106 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiGet, apiPost, formatDateTime, UNIT_LABELS } from "@/lib/client";
-import {
-  Button,
-  Card,
-  Field,
-  Input,
-  Textarea,
-  Select,
-  Badge,
-  Empty,
-  PageHeader,
-  useToast,
-} from "@/app/_components/ui";
-import { Icon } from "@/app/_components/icons";
+import { Suspense } from "react";
+import { useApi, qs } from "@/lib/useApi";
+import { useQueryState } from "@/lib/useQueryState";
+import { money, num, formatDate, relativeTime } from "@/lib/format";
+import { Card, PageHeader, ButtonLink, Select, SearchInput, Input, EmptyState } from "@/app/_components/ui";
+import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
+import { Plus, TrayArrowDown } from "@/app/_components/icons";
 
-export default function ArrivalsPage() {
-  const toast = useToast();
-  const [products, setProducts] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    product: "",
-    warehouse: "",
-    quantity: "",
-    unitCost: "",
-    supplierId: "",
-    note: "",
-  });
+function Inner() {
+  const [f, setF] = useQueryState({ page: "1" });
+  const { data, loading, error, reload } = useApi(`/api/arrivals${qs({ q: f.q, warehouse: f.warehouse, supplier: f.supplier, from: f.from, to: f.to, page: f.page, limit: 30 })}`);
+  const { data: warehouses } = useApi("/api/warehouses");
+  const { data: suppliers } = useApi("/api/suppliers");
 
-  async function load() {
-    try {
-      const [p, w, s, h] = await Promise.all([
-        apiGet("/api/products?light=1"),
-        apiGet("/api/warehouses"),
-        apiGet("/api/suppliers"),
-        apiGet("/api/arrivals"),
-      ]);
-      setProducts(p);
-      setWarehouses(w);
-      setSuppliers(s);
-      setHistory(h);
-    } catch (e) {
-      toast(e.message, "error");
-    }
-  }
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function submit(e) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await apiPost("/api/arrivals", {
-        ...form,
-        quantity: Number(form.quantity),
-        unitCost: form.unitCost ? Number(form.unitCost) : undefined,
-      });
-      toast("Receptie inregistrata — stocul a fost marit");
-      setForm({
-        product: "",
-        warehouse: "",
-        quantity: "",
-        unitCost: "",
-        supplierId: "",
-        note: "",
-      });
-      load();
-    } catch (e) {
-      toast(e.message, "error");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const columns = [
+    {
+      key: "number",
+      header: "Recepție",
+      render: (d) => (
+        <div>
+          <div className="font-medium text-fg">{d.number || "—"}</div>
+          <div className="text-[12px] text-fg-3">{formatDate(d.createdAt)}</div>
+        </div>
+      ),
+    },
+    {
+      key: "supplier",
+      header: "Furnizor",
+      render: (d) => (
+        <div>
+          <div className="text-fg-2">{d.supplier || <span className="text-fg-4">—</span>}</div>
+          {d.supplierInvoice && <div className="text-[12px] text-fg-3">Factura {d.supplierInvoice}</div>}
+        </div>
+      ),
+    },
+    {
+      key: "items",
+      header: "Produse",
+      render: (d) => (
+        <div className="max-w-[320px] truncate text-[12.5px] text-fg-3">
+          {d.items.map((l) => `${l.productName || l.product?.name} × ${num(l.quantity)}`).join(", ")}
+        </div>
+      ),
+    },
+    { key: "warehouse", header: "Depozit", className: "hidden md:table-cell", headClassName: "hidden md:table-cell", render: (d) => d.warehouse?.name || "—" },
+    { key: "total", header: "Valoare", align: "right", render: (d) => <span className="tnum font-medium text-fg">{d.total ? money(d.total) : "—"}</span> },
+    { key: "by", header: "Înregistrat", align: "right", className: "hidden lg:table-cell", headClassName: "hidden lg:table-cell", render: (d) => <span className="text-[12.5px] text-fg-3">{d.createdBy?.name || d.source?.toUpperCase() || "—"} · {relativeTime(d.createdAt)}</span> },
+  ];
 
   return (
-    <div>
+    <div className="animate-in">
       <PageHeader
-        title="Receptie marfa"
-        subtitle="Inregistrati stocul nou primit pentru produse existente. Stocul creste automat."
+        title="Recepții de marfă"
+        description="Intrările de marfă de la furnizori. Stocul crește automat, iar prețul de achiziție se actualizează."
+        actions={
+          <ButtonLink href="/receptie/nou" variant="primary" icon={Plus}>
+            Recepție nouă
+          </ButtonLink>
+        }
       />
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="p-5">
-          <form onSubmit={submit} className="space-y-4">
-            <Field label="Produs" required>
-              <Select
-                value={form.product}
-                onChange={(e) => setForm({ ...form, product: e.target.value })}
-                required
-              >
-                <option value="">— alege produs —</option>
-                {products.map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Depozit destinatie" required>
-              <Select
-                value={form.warehouse}
-                onChange={(e) =>
-                  setForm({ ...form, warehouse: e.target.value })
-                }
-                required
-              >
-                <option value="">— depozit —</option>
-                {warehouses.map((w) => (
-                  <option key={w._id} value={w._id}>
-                    {w.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Cantitate primita" required>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.quantity}
-                  onChange={(e) =>
-                    setForm({ ...form, quantity: e.target.value })
-                  }
-                  required
-                />
-              </Field>
-              <Field label="Pret achizitie / unit.">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.unitCost}
-                  onChange={(e) =>
-                    setForm({ ...form, unitCost: e.target.value })
-                  }
-                  placeholder="optional"
-                />
-              </Field>
-            </div>
-            <Field label="Furnizor">
-              <Select
-                value={form.supplierId}
-                onChange={(e) =>
-                  setForm({ ...form, supplierId: e.target.value })
-                }
-              >
-                <option value="">— fara furnizor —</option>
-                {suppliers.map((s) => (
-                  <option key={s._id} value={s._id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-              {suppliers.length === 0 && (
-                <span className="mt-1 block text-xs text-amber-600">
-                  Niciun furnizor. Adauga-i in pagina „Furnizori".
-                </span>
-              )}
-            </Field>
-            <Field label="Nota">
-              <Textarea
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-              />
-            </Field>
-            <Button
-              type="submit"
-              variant="success"
-              disabled={loading}
-              className="w-full"
-            >
-              {loading ? "Se inregistreaza…" : "Inregistreaza receptia"}
-            </Button>
-          </form>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
-            <Icon name="inbox" className="h-4 w-4 text-slate-400" />
-            <h2 className="font-semibold text-slate-800">Istoric receptii</h2>
-          </div>
-          {history.length === 0 ? (
-            <Empty>Nicio receptie inca.</Empty>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {history.map((t) => (
-                <div key={t._id} className="flex items-center gap-3 px-5 py-3.5">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                    <Icon name="inbox" className="h-[18px] w-[18px]" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-slate-700">
-                      {t.product?.name || t.productName}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      {t.warehouse?.name}
-                      {t.supplier ? ` · ${t.supplier}` : ""} ·{" "}
-                      {formatDateTime(t.createdAt)}
-                    </div>
-                  </div>
-                  <Badge color="green">
-                    +{t.quantity} {t.product && UNIT_LABELS[t.product.unit]}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
+      <Card className="overflow-hidden">
+        <Toolbar>
+          <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Număr, produs, furnizor…" className="w-full sm:w-64" />
+          <Select value={f.supplier || ""} onChange={(e) => setF({ supplier: e.target.value })} className="w-[180px]">
+            <option value="">Toți furnizorii</option>
+            {(suppliers || []).map((s) => (
+              <option key={s._id} value={s._id}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+          <Select value={f.warehouse || ""} onChange={(e) => setF({ warehouse: e.target.value })} className="w-[170px]">
+            <option value="">Toate depozitele</option>
+            {(warehouses || []).map((w) => (
+              <option key={w._id} value={w._id}>
+                {w.name}
+              </option>
+            ))}
+          </Select>
+          <Input type="date" value={f.from || ""} onChange={(e) => setF({ from: e.target.value })} className="w-[140px]" aria-label="De la" />
+          <Input type="date" value={f.to || ""} onChange={(e) => setF({ to: e.target.value })} className="w-[140px]" aria-label="Până la" />
+        </Toolbar>
+        <DataTable
+          columns={columns}
+          rows={data?.items}
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          rowHref={(d) => `/receptie/${d._id}`}
+          empty={<EmptyState icon={TrayArrowDown} title="Nicio recepție" description="Înregistrați marfa sosită de la furnizori pentru a crește stocul." action={<ButtonLink href="/receptie/nou" size="sm" variant="primary" icon={Plus}>Recepție nouă</ButtonLink>} />}
+        />
+        <Pagination page={Number(f.page) || 1} limit={30} total={data?.total || 0} onChange={(p) => setF({ page: p }, { resetPage: false })} />
+      </Card>
     </div>
+  );
+}
+
+export default function ArrivalsPage() {
+  return (
+    <Suspense>
+      <Inner />
+    </Suspense>
   );
 }

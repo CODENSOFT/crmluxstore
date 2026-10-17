@@ -1,142 +1,72 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiGet, formatDateTime } from "@/lib/client";
-import { Card, Badge, Empty, PageHeader, useToast } from "@/app/_components/ui";
-import { Icon } from "@/app/_components/icons";
-import { useUser } from "@/app/_components/user";
+import { Suspense } from "react";
+import Link from "next/link";
+import { useApi, qs } from "@/lib/useApi";
+import { useQueryState } from "@/lib/useQueryState";
+import { formatDateTime, relativeTime } from "@/lib/format";
+import { roleLabel } from "@/lib/constants";
+import { Card, PageHeader, Select, SearchInput, Input, Badge, Avatar, EmptyState } from "@/app/_components/ui";
+import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
+import { ClockCounterClockwise } from "@/app/_components/icons";
 
-const CATEGORIES = [
-  ["", "Toate"],
-  ["order", "Comenzi"],
-  ["stock", "Stoc"],
-  ["product", "Produse"],
-  ["supplier", "Furnizori"],
-];
+const CATS = { order: "Comenzi", product: "Produse", stock: "Stoc", warehouse: "Depozite", customer: "Clienți", supplier: "Furnizori", user: "Utilizatori", integration: "Integrări", settings: "Setări" };
+const TONE = { order: "accent", product: "violet", stock: "info", customer: "ok", integration: "warn", user: "neutral", settings: "neutral" };
 
-// Iconita + culoare in functie de actiune
-function actionStyle(action) {
-  if (action.startsWith("supplier"))
-    return { icon: "truck", tone: "bg-indigo-50 text-indigo-600" };
-  if (action.startsWith("product"))
-    return { icon: "package", tone: "bg-violet-50 text-violet-600" };
-  if (action === "transfer")
-    return { icon: "transfer", tone: "bg-sky-50 text-sky-600" };
-  if (action === "arrival")
-    return { icon: "inbox", tone: "bg-emerald-50 text-emerald-600" };
-  if (action === "writeoff")
-    return { icon: "trash", tone: "bg-rose-50 text-rose-600" };
-  if (action.includes("reject"))
-    return { icon: "x", tone: "bg-rose-50 text-rose-600" };
-  if (action.includes("approv"))
-    return { icon: "checkCircle", tone: "bg-emerald-50 text-emerald-600" };
-  if (action === "deleted")
-    return { icon: "trash", tone: "bg-rose-50 text-rose-600" };
-  return { icon: "receipt", tone: "bg-indigo-50 text-indigo-600" };
+function Inner() {
+  const [f, setF] = useQueryState({ page: "1" });
+  const { data, loading, error, reload } = useApi(`/api/activity${qs({ q: f.q, category: f.category, user: f.user, from: f.from, to: f.to, page: f.page, limit: 50 })}`);
+  const { data: users } = useApi("/api/users");
+  const columns = [
+    { key: "date", header: "Când", render: (a) => <span className="whitespace-nowrap text-[12.5px] text-fg-3" title={formatDateTime(a.createdAt)}>{relativeTime(a.createdAt)}<div className="text-fg-4">{formatDateTime(a.createdAt)}</div></span> },
+    { key: "user", header: "Cine", render: (a) => <div className="flex items-center gap-2"><Avatar name={a.userName} size={26} /><div><div className="text-[13px] text-fg">{a.userName || "—"}</div><div className="text-[11.5px] text-fg-4">{a.userRole ? roleLabel(a.userRole) : "sistem"}</div></div></div> },
+    { key: "cat", header: "Zona", render: (a) => (a.category ? <Badge tone={TONE[a.category]}>{CATS[a.category] || a.category}</Badge> : "—") },
+    {
+      key: "what",
+      header: "Ce a făcut",
+      render: (a) => (
+        <div className="min-w-[260px]">
+          <div className="text-[13px] text-fg">
+            {a.label}
+            {a.order ? (
+              <Link href={`/comenzi/${a.order}`} className="ml-1.5 font-medium text-accent hover:underline">{a.orderNumber}</Link>
+            ) : a.entityName ? (
+              <span className="ml-1.5 font-medium">{a.entityName}</span>
+            ) : null}
+          </div>
+          {a.details && <div className="mt-0.5 text-[12.5px] text-fg-3">{a.details}</div>}
+        </div>
+      ),
+    },
+  ];
+  return (
+    <div className="animate-in">
+      <PageHeader title="Istoric activitate" description="Cine, ce și când — toate acțiunile importante din CRM. Se păstrează 30 de zile." />
+      <Card className="overflow-hidden">
+        <Toolbar>
+          <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Caută în detalii…" className="w-full sm:w-64" />
+          <Select value={f.category || ""} onChange={(e) => setF({ category: e.target.value })} className="w-[160px]">
+            <option value="">Toate zonele</option>
+            {Object.entries(CATS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </Select>
+          <Select value={f.user || ""} onChange={(e) => setF({ user: e.target.value })} className="w-[170px]">
+            <option value="">Toți utilizatorii</option>
+            {(users || []).map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
+          </Select>
+          <Input type="date" value={f.from || ""} onChange={(e) => setF({ from: e.target.value })} className="w-[140px]" aria-label="De la" />
+          <Input type="date" value={f.to || ""} onChange={(e) => setF({ to: e.target.value })} className="w-[140px]" aria-label="Până la" />
+        </Toolbar>
+        <DataTable columns={columns} rows={data?.items} loading={loading} error={error} onRetry={reload} dense empty={<EmptyState icon={ClockCounterClockwise} title="Nicio activitate" />} />
+        <Pagination page={Number(f.page) || 1} limit={50} total={data?.total || 0} onChange={(p) => setF({ page: p }, { resetPage: false })} />
+      </Card>
+    </div>
+  );
 }
 
 export default function ActivityPage() {
-  const me = useUser();
-  const toast = useToast();
-  const [items, setItems] = useState([]);
-  const [cat, setCat] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const q = cat ? `?category=${cat}` : "";
-      setItems(await apiGet(`/api/activity${q}`));
-    } catch (e) {
-      toast(e.message, "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat]);
-
-  if (me?.role !== "admin") {
-    return (
-      <Card className="p-8 text-center text-slate-500">
-        Acces permis doar administratorului.
-      </Card>
-    );
-  }
-
   return (
-    <div className="max-w-3xl">
-      <PageHeader
-        title="Istoric activitate"
-        subtitle="Cine, ce si cum — comenzi, stoc, produse. Se pastreaza 1 luna, apoi se sterge automat."
-      />
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        {CATEGORIES.map(([v, l]) => (
-          <button
-            key={v}
-            onClick={() => setCat(v)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-              cat === v
-                ? "bg-indigo-600 text-white"
-                : "bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            {l}
-          </button>
-        ))}
-      </div>
-
-      <Card>
-        {loading ? (
-          <div className="p-8 text-center text-sm text-slate-400">
-            Se incarca…
-          </div>
-        ) : items.length === 0 ? (
-          <Empty>Nu exista activitate inregistrata.</Empty>
-        ) : (
-          <div className="divide-y divide-slate-50">
-            {items.map((a) => {
-              const st = actionStyle(a.action);
-              return (
-                <div key={a._id} className="flex items-start gap-3 px-5 py-3.5">
-                  <span
-                    className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${st.tone}`}
-                  >
-                    <Icon name={st.icon} className="h-[18px] w-[18px]" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="text-sm font-semibold text-slate-800">
-                        {a.userName}
-                      </span>
-                      <Badge color={a.userRole === "admin" ? "blue" : "slate"}>
-                        {a.userRole === "admin" ? "admin" : "manager"}
-                      </Badge>
-                      <span className="text-sm text-slate-500">{a.label}</span>
-                      {a.orderNumber && (
-                        <span className="text-sm font-medium text-indigo-600">
-                          {a.orderNumber}
-                        </span>
-                      )}
-                    </div>
-                    {a.details && (
-                      <div className="mt-0.5 text-xs text-slate-500">
-                        {a.details}
-                      </div>
-                    )}
-                  </div>
-                  <span className="shrink-0 text-xs text-slate-400">
-                    {formatDateTime(a.createdAt)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-    </div>
+    <Suspense>
+      <Inner />
+    </Suspense>
   );
 }

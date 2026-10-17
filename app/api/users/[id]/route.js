@@ -1,42 +1,52 @@
-import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { hashPassword } from "@/lib/auth";
-import { ok, fail, requireAdmin } from "@/lib/api";
+import { route, readJson, badRequest, notFound } from "@/lib/api";
+import { logAudit } from "@/lib/audit";
 
-export async function PATCH(req, { params }) {
-  const { response } = await requireAdmin();
-  if (response) return response;
-  await connectDB();
-  const { id } = await params;
-  const body = await req.json();
+export const PATCH = route(
+  async ({ req, user, params }) => {
+    const body = await readJson(req);
+    const target = await User.findById(params.id);
+    if (!target) throw notFound("Utilizator inexistent");
+    const self = String(target._id) === String(user.id);
 
-  const update = {};
-  if (body.name != null) update.name = body.name;
-  if (body.phone != null) update.phone = body.phone;
-  if (body.role != null) update.role = body.role === "admin" ? "admin" : "manager";
-  if (body.active != null) update.active = !!body.active;
-  if (body.password) update.passwordHash = await hashPassword(body.password);
+    if (body.name != null) target.name = String(body.name).trim();
+    if (body.phone != null) target.phone = body.phone;
+    if (body.position != null) target.position = body.position;
+    if (body.role != null) {
+      if (self && body.role !== "admin") throw badRequest("Nu vă puteți retrage singur drepturile de administrator");
+      target.role = body.role === "admin" ? "admin" : "manager";
+    }
+    if (body.active != null) {
+      if (self && !body.active) throw badRequest("Nu vă puteți dezactiva propriul cont");
+      target.active = !!body.active;
+    }
+    if (body.password) {
+      if (String(body.password).length < 6) throw badRequest("Parola trebuie să aibă minim 6 caractere");
+      target.passwordHash = await hashPassword(body.password);
+    }
+    if (body.email != null) {
+      const email = String(body.email).toLowerCase().trim();
+      if (await User.exists({ email, _id: { $ne: target._id } })) throw badRequest("Există deja un cont cu acest email");
+      target.email = email;
+    }
+    await target.save();
+    await logAudit({ action: "user_edited", category: "user", entity: target, entityName: target.name, user, details: Object.keys(body).filter((k) => k !== "password").join(", ") + (body.password ? ", parolă" : "") });
+    return target.toSafeJSON();
+  },
+  { auth: "admin" }
+);
 
-  if (body.email != null) {
-    const email = body.email.toLowerCase().trim();
-    const exists = await User.findOne({ email, _id: { $ne: id } });
-    if (exists) return fail("Exista deja un cont cu acest email");
-    update.email = email;
-  }
-
-  const user = await User.findByIdAndUpdate(id, update, { new: true });
-  if (!user) return fail("Utilizator inexistent", 404);
-  return ok(user.toSafeJSON());
-}
-
-export async function DELETE(req, { params }) {
-  const { user: admin, response } = await requireAdmin();
-  if (response) return response;
-  await connectDB();
-  const { id } = await params;
-  if (String(id) === String(admin.id)) {
-    return fail("Nu va puteti sterge propriul cont");
-  }
-  await User.findByIdAndDelete(id);
-  return ok({ deleted: true });
-}
+export const DELETE = route(
+  async ({ user, params }) => {
+    if (String(params.id) === String(user.id)) throw badRequest("Nu vă puteți șterge propriul cont");
+    const target = await User.findById(params.id);
+    if (!target) throw notFound("Utilizator inexistent");
+    if (target.role === "admin" && (await User.countDocuments({ role: "admin", active: true })) <= 1)
+      throw badRequest("Trebuie să rămână cel puțin un administrator activ");
+    await target.deleteOne();
+    await logAudit({ action: "user_deleted", category: "user", entityName: target.name, user });
+    return { deleted: true };
+  },
+  { auth: "admin" }
+);

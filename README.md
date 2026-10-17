@@ -1,142 +1,109 @@
-# CRM Lux Store
+# Lux Store CRM
 
-CRM pentru magazin de produse chimice auto & echipamente pentru spalatorii self-wash.
-Gestioneaza produse, depozite, comenzi (cu aprobare), sarcini, transferuri, receptii de
-marfa si anulari de stoc. Construit cu **Next.js 16 + MongoDB (Mongoose) + Tailwind**,
-cu integrare completa **Make.com**.
+CRM pentru **Lux Store** (luxstore.md, Chișinău) — magazin de chimie auto, spumă activă, produse de detailing, parfumuri auto, echipamente și piese pentru spălătorii self-service.
 
----
+Comenzi din magazin, site, telefon și B2B · clienți și condiții comerciale · stoc pe depozite cu registru complet · recepții, transferuri, casări, inventariere · plăți și datorii · rapoarte · integrare directă cu site-ul (WooCommerce) și pregătire completă pentru 1C — **fără Make sau alte servicii intermediare**.
 
-## 1. Cerinte
-
-- **Node.js 18+** (testat pe Node 22)
-- **MongoDB** — local sau [MongoDB Atlas](https://www.mongodb.com/atlas) (gratuit)
+Construit cu **Next.js 16 (App Router) + MongoDB (Mongoose) + Tailwind CSS 4**, găzduit pe Vercel.
 
 ---
 
-## 2. Instalare
+## Module
+
+| Modul | Ce face |
+|---|---|
+| **Panou** | Vânzări azi / luna (vs. luna trecută), marjă, de încasat, grafic 30 zile, canale, top produse și clienți, stoc critic, comenzi de procesat, sarcinile mele |
+| **Comenzi** | Flux: Nouă → (Așteaptă aprobare) → În pregătire → Gata → Livrare & facturare → Finalizată; anulare cu retur automat în stoc. Prețuri amănunt / angro pe client, reduceri, livrare, TVA, plăți parțiale, scadențe, notă internă, cereri de modificare cu aprobare, repetare comandă, factură / aviz / fișă de depozit tipărite (cu suma în litere) |
+| **Clienți** | Persoane fizice și juridice (IDNO, IBAN), segmente (spălătorii self-service, detailing, service, revânzători…), tip preț, reducere implicită, termen de plată, istoric, produse preferate, datorii, sarcini |
+| **Produse** | Categorii, mărci, SKU, cod de bare (scaner), preț amănunt / angro / achiziție cu marjă, cotă TVA, stoc minim, seturi (kit-uri), fotografii, import / export Excel (CSV), registru de mișcări |
+| **Stoc** | Matrice produs × depozit, valoare la vânzare / cost, listă „de comandat” (pe baza vânzărilor din 30 zile), registrul tuturor mișcărilor |
+| **Recepții / Transferuri / Casări** | Documente cu mai multe linii, numerotate (REC-, TRF-, ANL-), cu actualizarea prețului de achiziție și motive de casare |
+| **Inventariere** | Fișă de numărare (și pentru scaner), plusuri / lipsuri, diferență valorică, corectarea automată a stocului |
+| **Furnizori / Depozite** | Contacte, condiții, istoric recepții; depozite (depozit, magazin, mașină), depozit implicit, stoc publicat pe site |
+| **Sarcini** | Tablou Kanban cu drag & drop, termene, priorități, legate de clienți / comenzi, notificări |
+| **Rapoarte** | Vânzări (zi / săptămână / lună, categorii, canale, manageri, metode de plată), produse (clasificare ABC, stoc fără mișcare), clienți, datorii (cu restanțe), stoc, casări — export Excel |
+| **Integrări** | Site luxstore.md (WooCommerce), chei API, API v1 pentru 1C, webhook-uri de ieșire semnate, jurnal de sincronizare |
+| **Administrare** | Utilizatori (admin / manager), istoric activitate, setări companie / TVA / livrare / stoc |
+
+Extra: căutare globală **Ctrl/⌘ + K**, tasta **N** = comandă nouă, temă luminoasă / întunecată, interfață adaptată pentru telefon.
+
+---
+
+## Pornire locală
 
 ```bash
 npm install
+cp .env.example .env.local    # completați MONGODB_URI și JWT_SECRET
+npm run dev                   # http://localhost:3030
 ```
 
-Copiaza `.env.example` in `.env.local` si completeaza:
+La prima pornire se creează automat contul de administrator (din `SEED_ADMIN_*`), categoriile magazinului și un depozit implicit.
 
-```env
-MONGODB_URI=mongodb://localhost:27017/crm-lux-store   # sau URI-ul de Atlas
-JWT_SECRET=un-secret-lung-aleator
-MAKE_API_KEY=cheie-secreta-pentru-make
-MAKE_WEBHOOK_URL=                                       # optional, se poate seta si din UI
-SEED_ADMIN_EMAIL=admin@crm.local
-SEED_ADMIN_PASSWORD=admin123
-SEED_ADMIN_NAME=Administrator
-```
+| Variabilă | Rol |
+|---|---|
+| `MONGODB_URI` | Baza de date MongoDB (Atlas) |
+| `JWT_SECRET` | Secret pentru sesiuni |
+| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME` | Contul de admin creat la prima pornire |
+| `CRM_API_KEY` | Opțional — cheie API „master” (de preferat cheile create din Integrări) |
+| `CRON_SECRET` | Opțional — protejează sincronizarea zilnică `/api/cron/sync` |
 
-> Daca nu ai MongoDB local: creeaza un cluster gratuit pe Atlas, apasa **Connect →
-> Drivers**, copiaza URI-ul si pune-l in `MONGODB_URI`.
+`MAKE_API_KEY` / `MAKE_WEBHOOK_URL` nu mai sunt folosite și pot fi șterse din Vercel.
 
 ---
 
-## 3. Pornire
+## Trecerea de la versiunea veche (date existente)
+
+După publicare, rulați o singură dată migrarea (completează câmpurile noi, creează fișe de client din numele de pe comenzile vechi, numerotează documentele de stoc și pune soldul inițial în registrul de stoc):
 
 ```bash
-npm run dev      # dezvoltare → http://localhost:3006
-npm run build    # build de productie
-npm start        # ruleaza build-ul de productie → http://localhost:3006
+node --env-file=.env.local scripts/migrate-v2.mjs           # simulare — arată ce se va schimba
+node --env-file=.env.local scripts/migrate-v2.mjs --apply   # aplică
 ```
 
-La prima pornire se creeaza automat contul de admin din `.env.local`.
-
-**Autentificare initiala:** `admin@crm.local` / `admin123` (schimba parola dupa logare).
+Comenzile vechi cu status „Complet” sunt considerate achitate (versiunea veche nu urmărea plățile).
 
 ---
 
-## 4. Functionalitati
+## Integrări (fără Make)
 
-| Modul | Descriere |
-|-------|-----------|
-| **Conturi** | Admin adauga manageri. Rol-uri: admin / manager. |
-| **Comenzi** | Mai multe produse pe comanda, total calculat automat. Comenzile managerilor necesita **aprobarea adminului**; cele ale adminului se aproba automat. Responsabilul este managerul insusi (fortat) sau ales de admin. |
-| **Produse** | Denumire (obligatoriu), descriere, foto, unitate de masura (bucata/kg/litri/metru), pret, stoc pe depozit. |
-| **Depozite** | Creezi oricate depozite; apar peste tot unde selectezi stoc. |
-| **Receptie marfa** | Inregistrezi stocul nou primit — stocul creste automat in depozitul ales. |
-| **Transfer** | Muti o cantitate dintr-un depozit in altul. |
-| **Anulare (spisanie)** | Scoti din stoc produse defecte/expirate, cu motiv. |
-| **Sarcini** | Indicatii pentru manageri, cu termen (data) si prioritate. |
-| **Rapoarte** | Raport **comenzi** (filtre dupa data si status, valoare totala) si raport **stoc** (per produs/depozit, valoare, stoc scazut), cu **export CSV** (se deschide in Excel). |
-| **Stoc** | Se scade automat la aprobarea comenzilor si la transfer/anulare; creste la receptie. Avertizare stoc scazut pe panou. |
+### Site luxstore.md (WooCommerce)
+CRM → **Integrări → Site luxstore.md**: adresa site-ului + cheile REST API WooCommerce (Citire/Scriere) → **Salvează** → **Creează automat webhook-urile**.
+- Comenzile de pe site intră instant (webhook semnat HMAC) ca „Nouă de pe site”, cu clientul găsit / creat după telefon sau email.
+- Opțional: stocul se publică pe site la fiecare mișcare; statusul comenzii (finalizată / anulată) se actualizează pe site.
+- Plasă de siguranță: sincronizare zilnică automată (Vercel Cron) + buton „Sincronizează comenzile”.
 
----
+### 1C
+API REST v1 la `/api/v1`, cu chei create din **Integrări → API și chei** (tip 1C).
+Documentația completă pentru programatorul 1C (flux, JSON, exemple de cod BSL): **[`public/docs/INTEGRARE-1C.md`](public/docs/INTEGRARE-1C.md)** — disponibilă și în aplicație la `/docs/INTEGRARE-1C.md`. Specificația OpenAPI: `/api/v1/openapi.json`.
 
-## 5. Integrare Make.com
-
-Toata configurarea e vizibila in aplicatie la **Integrare Make** (meniu, doar admin):
-URL de baza, cheia API si lista de endpoint-uri.
-
-### Make → CRM (Make trimite date in CRM)
-
-Foloseste modulul **HTTP** din Make. La fiecare cerere adauga header-ul:
-
-```
-x-api-key: <MAKE_API_KEY din .env.local>
-```
-
-Endpoint-uri:
-
-| Metoda | Cale | Descriere |
-|--------|------|-----------|
-| GET | `/api/make/ping` | Test conexiune |
-| GET | `/api/make/products` | Lista produse + stoc |
-| POST | `/api/make/products` | Creeaza produs |
-| GET | `/api/make/warehouses` | Lista depozite (id-uri) |
-| GET | `/api/make/orders` | Lista comenzi |
-| POST | `/api/make/orders` | Creeaza comanda (ramane `pending`) |
-| POST | `/api/make/arrivals` | Receptie marfa (creste stocul) |
-
-Exemplu creare comanda (`POST /api/make/orders`):
-
-```json
-{
-  "items": [{ "sku": "SH-5L", "warehouseId": "<id-depozit>", "quantity": 2 }],
-  "customerName": "Ion Popescu",
-  "responsibleEmail": "manager@crm.local"
-}
-```
-
-### CRM → Make (CRM trimite evenimente catre Make)
-
-1. In Make creezi un scenariu cu trigger **Webhooks → Custom webhook** si copiezi URL-ul.
-2. Il lipesti in pagina **Integrare Make → Webhook de iesire** (sau in `MAKE_WEBHOOK_URL`).
-
-Evenimente trimise: `order.created`, `order.approved`, `order.rejected`,
-`product.created`, `arrival.created`, `transfer.created`, `writeoff.created`.
-Format: `{ "event": "...", "timestamp": "...", "data": { ... } }`.
+### Webhook-uri de ieșire
+Evenimente (comandă creată / modificată, plată, stoc modificat, produs, client, recepție…) trimise prin POST JSON către orice adresă, semnate cu `X-Lux-Signature: sha256=HMAC`.
 
 ---
 
-## 6. Test rapid (optional)
-
-Cu un MongoDB pornit pe `:27017` si serverul de dev ruland pe portul 3010
-(`PORT=3010 npm run dev`):
+## Teste
 
 ```bash
-bash scripts/smoke.sh
+# pe o bază de date de TEST goală:
+MONGODB_URI=mongodb://localhost:27017/crm-test npm run dev
+B=http://localhost:3030 node scripts/smoke.mjs     # ~96 verificări end-to-end
 ```
-
-Ruleaza 19 verificari end-to-end (autentificare, roluri, stoc, fluxul de aprobare a
-comenzilor, transfer, anulare, integrare Make etc.).
 
 ---
 
-## 7. Structura proiectului
+## Structura proiectului
 
 ```
 app/
-  (app)/            paginile protejate (dashboard, comenzi, produse, ...)
-  api/              rute API interne + api/make/* (integrare externa)
-  login/            pagina de autentificare
-  _components/      kit UI reutilizabil + contexte
-lib/                mongodb, auth, api guards, stock, make, seed, client
-models/             schemele Mongoose
-proxy.js            protectia rutelor (auth)
+  (app)/              paginile aplicației (panou, comenzi, clienți, produse, stoc, ...)
+  api/                API intern (sesiune) + api/v1 (extern, chei API) + webhooks + cron
+  print/              documente tipăribile (factură, aviz, fișă de depozit)
+  login/              autentificare
+  _components/        kit UI (ui, overlay, table, charts, pickers, icons)
+lib/                  logica de business: orderService, stock (registru atomic), stockDocs,
+                      pricing, customers, woo, apiV1, openapi, events (webhook-uri), dto
+models/               schemele Mongoose
+public/docs/          documentația pentru integrarea 1C
+scripts/              migrare v2, test end-to-end, resetare admin
+proxy.js              protecția paginilor (sesiune)
 ```

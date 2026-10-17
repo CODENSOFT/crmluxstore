@@ -1,197 +1,138 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { apiGet, apiPost, formatDateTime, UNIT_LABELS } from "@/lib/client";
-import {
-  Button,
-  Card,
-  Field,
-  Input,
-  Select,
-  Badge,
-  Empty,
-  PageHeader,
-  useToast,
-} from "@/app/_components/ui";
-import { Icon } from "@/app/_components/icons";
+import { Suspense, useState } from "react";
+import { apiPost } from "@/lib/client";
+import { useApi, qs, invalidate } from "@/lib/useApi";
+import { useQueryState } from "@/lib/useQueryState";
+import { money, num, formatDateTime, relativeTime } from "@/lib/format";
+import { WRITEOFF_REASONS, writeoffReasonLabel } from "@/lib/constants";
+import { Card, PageHeader, Button, Select, SearchInput, Field, Input, EmptyState, Badge } from "@/app/_components/ui";
+import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
+import { Drawer, useToast } from "@/app/_components/overlay";
+import { Plus, TrashSimple } from "@/app/_components/icons";
+import { DocLinesEditor, linesPayload, linesValid } from "../_stockdoc";
 
-function stockOf(product, warehouseId) {
-  if (!product || !warehouseId) return 0;
-  const e = (product.stock || []).find(
-    (s) => String(s.warehouse?._id || s.warehouse) === String(warehouseId)
-  );
-  return e ? e.quantity : 0;
+const TONE = { expired: "warn", damaged: "bad", defect: "bad", internal: "info", sample: "violet", lost: "bad", other: "neutral" };
+
+function WriteoffForm(props) {
+  return props.open ? <WriteoffFormBody {...props} /> : null;
 }
 
-const REASONS = ["Defect", "Expirat", "Deteriorat", "Pierdere", "Altul"];
-
-export default function WriteOffPage() {
+function WriteoffFormBody({ open, onClose }) {
   const toast = useToast();
-  const [products, setProducts] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    product: "",
-    warehouse: "",
-    quantity: "",
-    reason: "Defect",
-  });
+  const { data: products } = useApi("/api/products?light=1");
+  const { data: warehouses } = useApi("/api/warehouses");
+  const [whSel, setWarehouse] = useState("");
+  const warehouse = whSel || (warehouses?.length ? String((warehouses.find((w) => w.isDefault) || warehouses[0])._id) : "");
+  const [reasonCode, setReasonCode] = useState("damaged");
+  const [reason, setReason] = useState("");
+  const [lines, setLines] = useState([]);
+  const [saving, setSaving] = useState(false);
 
-  async function load() {
+  const save = async () => {
+    setSaving(true);
     try {
-      const [p, w, h] = await Promise.all([
-        apiGet("/api/products?light=1"),
-        apiGet("/api/warehouses"),
-        apiGet("/api/writeoffs"),
-      ]);
-      setProducts(p);
-      setWarehouses(w);
-      setHistory(h);
-    } catch (e) {
-      toast(e.message, "error");
-    }
-  }
-  useEffect(() => {
-    load();
-  }, []);
-
-  const product = useMemo(
-    () => products.find((p) => p._id === form.product),
-    [products, form.product]
-  );
-  const available = stockOf(product, form.warehouse);
-
-  async function submit(e) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await apiPost("/api/writeoffs", {
-        ...form,
-        quantity: Number(form.quantity),
-      });
-      toast("Produs anulat din stoc");
-      setForm({ product: "", warehouse: "", quantity: "", reason: "Defect" });
-      load();
+      const d = await apiPost("/api/writeoffs", { warehouse, reasonCode, reason, items: linesPayload(lines) });
+      toast(`Casarea ${d.number} a fost înregistrată`);
+      invalidate("/api/writeoffs", "/api/products", "/api/stock", "/api/dashboard");
+      onClose();
     } catch (e) {
       toast(e.message, "error");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  }
-
+  };
   return (
-    <div>
-      <PageHeader
-        title="Anulare produs (spisanie)"
-        subtitle="Scoateti din stoc produsele defecte, expirate sau deteriorate."
-      />
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="p-5">
-          <form onSubmit={submit} className="space-y-4">
-            <Field label="Produs" required>
-              <Select
-                value={form.product}
-                onChange={(e) => setForm({ ...form, product: e.target.value })}
-                required
-              >
-                <option value="">— alege produs —</option>
-                {products.map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Depozit" required>
-              <Select
-                value={form.warehouse}
-                onChange={(e) =>
-                  setForm({ ...form, warehouse: e.target.value })
-                }
-                required
-              >
-                <option value="">— depozit —</option>
-                {warehouses.map((w) => (
-                  <option key={w._id} value={w._id}>
-                    {w.name}
-                  </option>
-                ))}
-              </Select>
-              {form.product && form.warehouse && (
-                <span className="mt-1 block text-xs text-slate-400">
-                  Disponibil: {available} {product && UNIT_LABELS[product.unit]}
-                </span>
-              )}
-            </Field>
-            <Field label="Cantitate de anulat" required>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.quantity}
-                onChange={(e) =>
-                  setForm({ ...form, quantity: e.target.value })
-                }
-                required
-              />
-            </Field>
-            <Field label="Motiv">
-              <Select
-                value={form.reason}
-                onChange={(e) => setForm({ ...form, reason: e.target.value })}
-              >
-                {REASONS.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button
-              type="submit"
-              variant="danger"
-              disabled={loading}
-              className="w-full"
-            >
-              {loading ? "Se anuleaza…" : "Anuleaza din stoc"}
-            </Button>
-          </form>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
-            <Icon name="trash" className="h-4 w-4 text-slate-400" />
-            <h2 className="font-semibold text-slate-800">Istoric anulari</h2>
-          </div>
-          {history.length === 0 ? (
-            <Empty>Nicio anulare inca.</Empty>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {history.map((t) => (
-                <div key={t._id} className="flex items-center gap-3 px-5 py-3.5">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
-                    <Icon name="trash" className="h-[18px] w-[18px]" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-slate-700">
-                      {t.product?.name || t.productName}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      {t.warehouse?.name} · {t.reason} ·{" "}
-                      {formatDateTime(t.createdAt)}
-                    </div>
-                  </div>
-                  <Badge color="red">
-                    −{t.quantity} {t.product && UNIT_LABELS[t.product.unit]}
-                  </Badge>
-                </div>
+    <Drawer
+      open={open}
+      onClose={onClose}
+      width="max-w-2xl"
+      title="Casare stoc"
+      description="Scoaterea din stoc a produselor expirate, deteriorate sau folosite intern."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Renunță
+          </Button>
+          <Button variant="danger" icon={TrashSimple} loading={saving} disabled={!warehouse || !linesValid(lines, { warehouse, checkStock: true, products })} onClick={save}>
+            Casează produsele
+          </Button>
+        </>
+      }
+    >
+      <div className="-mx-5 space-y-4">
+        <div className="grid gap-3 px-5 sm:grid-cols-2">
+          <Field label="Depozit">
+            <Select value={warehouse} onChange={(e) => setWarehouse(e.target.value)}>
+              {(warehouses || []).map((w) => (
+                <option key={w._id} value={w._id}>
+                  {w.name}
+                </option>
               ))}
-            </div>
-          )}
-        </Card>
+            </Select>
+          </Field>
+          <Field label="Motiv">
+            <Select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>
+              {WRITEOFF_REASONS.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {r.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Detalii" className="sm:col-span-2">
+            <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="ex: canistră fisurată la descărcare" />
+          </Field>
+        </div>
+        <DocLinesEditor lines={lines} setLines={setLines} products={products} warehouse={warehouse} checkStock />
       </div>
+    </Drawer>
+  );
+}
+
+function Inner() {
+  const [f, setF] = useQueryState({ page: "1" });
+  const [open, setOpen] = useState(false);
+  const { data, loading, error, reload } = useApi(`/api/writeoffs${qs({ q: f.q, reason: f.reason, warehouse: f.warehouse, page: f.page, limit: 30 })}`);
+  const columns = [
+    { key: "number", header: "Document", render: (d) => <div><div className="font-medium text-fg">{d.number || "—"}</div><div className="text-[12px] text-fg-3">{formatDateTime(d.createdAt)}</div></div> },
+    { key: "reason", header: "Motiv", render: (d) => <div><Badge tone={TONE[d.reasonCode] || "neutral"}>{d.reasonCode ? writeoffReasonLabel(d.reasonCode) : "—"}</Badge>{d.reason && <div className="mt-1 max-w-[260px] truncate text-[12px] text-fg-3">{d.reason}</div>}</div> },
+    { key: "items", header: "Produse", render: (d) => <div className="max-w-[340px] truncate text-[12.5px] text-fg-3">{d.items.map((l) => `${l.productName || l.product?.name} × ${num(l.quantity)}`).join(", ")}</div> },
+    { key: "warehouse", header: "Depozit", className: "hidden md:table-cell", headClassName: "hidden md:table-cell", render: (d) => d.warehouse?.name || "—" },
+    { key: "cost", header: "Pierdere (cost)", align: "right", render: (d) => <span className="tnum font-medium text-fg">{d.totalCost ? money(d.totalCost) : "—"}</span> },
+    { key: "by", header: "De", align: "right", className: "hidden lg:table-cell", headClassName: "hidden lg:table-cell", render: (d) => <span className="text-[12.5px] text-fg-3">{d.createdBy?.name || "—"} · {relativeTime(d.createdAt)}</span> },
+  ];
+  return (
+    <div className="animate-in">
+      <PageHeader
+        title="Casări"
+        description="Produse scoase din stoc: expirate, deteriorate, defecte, consum intern sau mostre."
+        actions={<Button variant="primary" icon={Plus} onClick={() => setOpen(true)}>Casare nouă</Button>}
+      />
+      <Card className="overflow-hidden">
+        <Toolbar>
+          <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Număr sau produs…" className="w-full sm:w-64" />
+          <Select value={f.reason || ""} onChange={(e) => setF({ reason: e.target.value })} className="w-[200px]">
+            <option value="">Toate motivele</option>
+            {WRITEOFF_REASONS.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.label}
+              </option>
+            ))}
+          </Select>
+        </Toolbar>
+        <DataTable columns={columns} rows={data?.items} loading={loading} error={error} onRetry={reload} empty={<EmptyState icon={TrashSimple} title="Nicio casare" description="Nu există casări înregistrate." />} />
+        <Pagination page={Number(f.page) || 1} limit={30} total={data?.total || 0} onChange={(p) => setF({ page: p }, { resetPage: false })} />
+      </Card>
+      <WriteoffForm open={open} onClose={() => { setOpen(false); reload(); }} />
     </div>
+  );
+}
+
+export default function WriteoffsPage() {
+  return (
+    <Suspense>
+      <Inner />
+    </Suspense>
   );
 }

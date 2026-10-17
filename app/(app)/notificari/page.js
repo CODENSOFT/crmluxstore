@@ -1,238 +1,122 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiGet, apiPost, apiPatch, money, formatDateTime, UNIT_LABELS } from "@/lib/client";
-import {
-  Button,
-  Card,
-  Empty,
-  PageHeader,
-  useToast,
-} from "@/app/_components/ui";
-import { Icon } from "@/app/_components/icons";
+import { apiDelete, apiPatch, apiPost } from "@/lib/client";
+import { useApi, invalidate } from "@/lib/useApi";
+import { money, num, relativeTime, formatDateTime } from "@/lib/format";
+import { UNIT_LABELS } from "@/lib/constants";
+import { Card, PageHeader, Button, Tabs, EmptyState, Skeleton, cx, StageBadge } from "@/app/_components/ui";
+import { useToast } from "@/app/_components/overlay";
+import { Bell, Check, Trash, Receipt, Globe, Warning, CheckSquareOffset, PlugsConnected, PencilSimple, Clock, CheckCircle, Info } from "@/app/_components/icons";
 
-function typeStyle(type) {
-  if (type === "order_decision")
-    return { icon: "checkCircle", tone: "bg-emerald-50 text-emerald-600" };
-  if (type === "order_assigned")
-    return { icon: "receipt", tone: "bg-indigo-50 text-indigo-600" };
-  if (type === "order_edit")
-    return { icon: "edit", tone: "bg-violet-50 text-violet-600" };
-  return { icon: "clock", tone: "bg-amber-50 text-amber-600" }; // approval / new
-}
+const TYPE = {
+  order_approval: { icon: Clock, tone: "bg-warn-soft text-warn" },
+  order_decision: { icon: CheckCircle, tone: "bg-ok-soft text-ok" },
+  order_new: { icon: Receipt, tone: "bg-accent-soft text-accent" },
+  order_assigned: { icon: Receipt, tone: "bg-accent-soft text-accent" },
+  order_edit: { icon: PencilSimple, tone: "bg-warn-soft text-warn" },
+  site_order: { icon: Globe, tone: "bg-accent-soft text-accent" },
+  task_assigned: { icon: CheckSquareOffset, tone: "bg-violet-soft text-violet" },
+  low_stock: { icon: Warning, tone: "bg-bad-soft text-bad" },
+  integration: { icon: PlugsConnected, tone: "bg-bad-soft text-bad" },
+  payment: { icon: CheckCircle, tone: "bg-ok-soft text-ok" },
+  system: { icon: Info, tone: "bg-surface-2 text-fg-2" },
+};
 
 export default function NotificationsPage() {
   const router = useRouter();
   const toast = useToast();
-  const [tab, setTab] = useState("current");
-  const [items, setItems] = useState([]);
-  const [unread, setUnread] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(null);
+  const [tab, setTab] = useState("0");
+  const { data, loading, reload, mutate } = useApi(`/api/notifications?read=${tab}&limit=200`);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const read = tab === "current" ? "0" : "1";
-      const d = await apiGet(`/api/notifications?read=${read}`);
-      setItems(d.items);
-      setUnread(d.unread);
-    } catch (e) {
-      toast(e.message, "error");
-    } finally {
-      setLoading(false);
+  const open = async (n) => {
+    if (!n.read) {
+      await apiPatch(`/api/notifications/${n._id}`, { read: true }).catch(() => {});
+      invalidate("/api/me");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  async function markAllRead() {
-    await apiPost("/api/notifications", {}).catch(() => {});
-    toast("Toate notificarile au fost marcate citite");
-    load();
-  }
-
-  async function decide(orderId, action, e) {
-    e?.stopPropagation();
-    setBusy(orderId + action);
-    try {
-      await apiPatch(`/api/orders/${orderId}`, { action });
-      toast(action === "approve" ? "Comanda aprobata" : "Comanda respinsa");
-      load();
-    } catch (e) {
-      toast(e.message, "error");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function openOrder(n) {
-    const orderId = n.order?._id || n.order;
-    if (!orderId) return;
-    if (!n.read) apiPatch(`/api/notifications/${n._id}`, {}).catch(() => {});
-    router.push(`/comenzi?order=${orderId}`);
-  }
+    router.push(n.link || (n.order ? `/comenzi/${n.order._id || n.order}` : "/"));
+  };
+  const markAll = async () => {
+    await apiPost("/api/notifications", {});
+    invalidate("/api/me", "/api/notifications");
+    reload();
+    toast("Toate notificările au fost marcate ca citite");
+  };
+  const clearRead = async () => {
+    const r = await apiDelete("/api/notifications");
+    reload();
+    toast(`${r.deleted} notificări șterse`);
+  };
+  const toggle = async (n) => {
+    await apiPatch(`/api/notifications/${n._id}`, { read: !n.read });
+    mutate((d) => ({ ...d, items: d.items.filter((x) => x._id !== n._id) }));
+    invalidate("/api/me");
+  };
 
   return (
-    <div className="max-w-3xl">
+    <div className="animate-in">
       <PageHeader
-        title="Notificari"
-        subtitle="Cererile si evenimentele care necesita atentia ta."
-        action={
-          tab === "current" && items.length > 0 ? (
-            <Button variant="secondary" onClick={markAllRead}>
-              <Icon name="check" className="h-4 w-4" strokeWidth={2} />
-              Marcheaza toate citite
+        title="Notificări"
+        description="Comenzi de aprobat, comenzi noi de pe site, sarcini atribuite, stoc critic și erori de sincronizare."
+        actions={
+          tab === "0" ? (
+            <Button icon={Check} onClick={markAll} disabled={!data?.items?.length}>
+              Marchează toate citite
             </Button>
-          ) : null
+          ) : (
+            <Button variant="danger-ghost" icon={Trash} onClick={clearRead} disabled={!data?.items?.length}>
+              Golește istoricul
+            </Button>
+          )
         }
       />
-
-      <div className="mb-4 flex gap-2">
-        <button
-          onClick={() => setTab("current")}
-          className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-            tab === "current"
-              ? "bg-indigo-600 text-white"
-              : "bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          Curente
-          {unread > 0 && (
-            <span
-              className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${
-                tab === "current"
-                  ? "bg-white/20 text-white"
-                  : "bg-rose-500 text-white"
-              }`}
-            >
-              {unread}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setTab("history")}
-          className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-            tab === "history"
-              ? "bg-indigo-600 text-white"
-              : "bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          <Icon name="history" className="h-4 w-4" />
-          Istoric
-        </button>
-      </div>
-
-      <Card>
-        {loading ? (
-          <div className="p-10 text-center text-sm text-slate-400">
-            Se incarca…
-          </div>
-        ) : items.length === 0 ? (
-          <Empty>
-            {tab === "current"
-              ? "Nu ai notificari noi."
-              : "Istoricul notificarilor este gol."}
-          </Empty>
+      <Card className="overflow-hidden">
+        <div className="px-4">
+          <Tabs
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { key: "0", label: "Necitite", count: data && tab === "0" ? data.items.length : data?.unread },
+              { key: "1", label: "Citite" },
+            ]}
+          />
+        </div>
+        {loading && !data ? (
+          <div className="space-y-2 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16" />)}</div>
+        ) : !data?.items?.length ? (
+          <EmptyState icon={Bell} title={tab === "0" ? "Nicio notificare nouă" : "Istoric gol"} description={tab === "0" ? "Sunteți la zi." : "Notificările citite se păstrează 90 de zile."} />
         ) : (
-          <div className="divide-y divide-slate-50">
-            {items.map((n) => {
-              const st = typeStyle(n.type);
-              const orderId = n.order?._id || n.order;
-              const canDecide =
-                (n.type === "order_approval" || n.type === "order_new") &&
-                n.order &&
-                (n.order.status === "pending_approval" ||
-                  n.order.status === "new");
+          <ul className="divide-y divide-line">
+            {data.items.map((n) => {
+              const t = TYPE[n.type] || TYPE.system;
+              const IconC = t.icon;
               return (
-                <div
-                  key={n._id}
-                  onClick={() => openOrder(n)}
-                  className={`flex cursor-pointer items-start gap-3 px-5 py-4 transition-colors hover:bg-slate-50 ${
-                    !n.read ? "bg-indigo-50/30" : ""
-                  }`}
-                >
-                  <span
-                    className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${st.tone}`}
-                  >
-                    <Icon name={st.icon} className="h-[18px] w-[18px]" />
+                <li key={n._id} className={cx("group flex gap-3.5 px-5 py-4 transition-colors hover:bg-surface-2/60", !n.read && "bg-accent-soft/30")}>
+                  <span className={cx("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", t.tone)}>
+                    <IconC size={18} />
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="text-sm font-semibold text-slate-800">
-                        {n.title}
-                      </div>
-                      <span className="shrink-0 text-xs text-slate-400">
-                        {formatDateTime(n.createdAt)}
-                      </span>
+                  <button type="button" onClick={() => open(n)} className="min-w-0 flex-1 text-left">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cx("text-[13.5px]", n.read ? "text-fg-2" : "font-semibold text-fg")}>{n.title}</span>
+                      {n.order?.status && <StageBadge status={n.order.status} short />}
                     </div>
-                    {n.message && (
-                      <div className="mt-0.5 text-xs text-slate-500">
-                        {n.message}
-                      </div>
-                    )}
-
+                    {n.message && <p className="mt-0.5 text-[13px] text-fg-3">{n.message}</p>}
                     {n.meta?.items?.length > 0 && (
-                      <div className="mt-2 space-y-1 rounded-lg bg-slate-50 px-3 py-2">
-                        {n.meta.items.slice(0, 6).map((it, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between text-xs"
-                          >
-                            <span className="truncate text-slate-600">
-                              {it.name}
-                              <span className="text-slate-400">
-                                {" "}
-                                × {it.quantity} {UNIT_LABELS[it.unit] || ""}
-                              </span>
-                            </span>
-                            <span className="ml-2 shrink-0 font-medium text-slate-600">
-                              {money(it.lineTotal)}
-                            </span>
-                          </div>
-                        ))}
-                        <div className="flex items-center justify-between border-t border-slate-200 pt-1 text-xs font-semibold text-slate-700">
-                          <span>Total</span>
-                          <span>{money(n.meta.total)}</span>
-                        </div>
-                      </div>
+                      <p className="mt-1.5 truncate text-[12.5px] text-fg-3">
+                        {n.meta.items.slice(0, 4).map((i) => `${i.name} × ${num(i.quantity)} ${UNIT_LABELS[i.unit] || ""}`).join(" · ")}
+                        {n.meta.total ? ` — ${money(n.meta.total)}` : ""}
+                      </p>
                     )}
-
-                    <div className="mt-2 flex items-center gap-2">
-                      {canDecide && (
-                        <>
-                          <button
-                            disabled={busy === orderId + "approve"}
-                            onClick={(e) => decide(orderId, "approve", e)}
-                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                          >
-                            Aproba
-                          </button>
-                          <button
-                            disabled={busy === orderId + "reject"}
-                            onClick={(e) => decide(orderId, "reject", e)}
-                            className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-200 hover:bg-rose-50 disabled:opacity-50"
-                          >
-                            Respinge
-                          </button>
-                        </>
-                      )}
-                      {orderId && (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600">
-                          Deschide comanda
-                          <Icon name="arrowRight" className="h-3.5 w-3.5" />
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                    <p className="mt-1 text-[12px] text-fg-4" title={formatDateTime(n.createdAt)}>{relativeTime(n.createdAt)}</p>
+                  </button>
+                  <button type="button" onClick={() => toggle(n)} className="self-start rounded-md px-2 py-1 text-[12px] font-medium text-fg-3 opacity-0 transition-opacity hover:bg-surface-3 hover:text-fg group-hover:opacity-100 focus:opacity-100">
+                    {n.read ? "Necitită" : "Citită"}
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
       </Card>
     </div>

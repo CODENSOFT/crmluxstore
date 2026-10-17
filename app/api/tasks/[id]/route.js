@@ -1,49 +1,50 @@
-import connectDB from "@/lib/mongodb";
 import Task from "@/models/Task";
-import { ok, fail, requireUser } from "@/lib/api";
+import User from "@/models/User";
+import { route, readJson, forbidden, notFound, badRequest } from "@/lib/api";
+import { populateTask } from "@/lib/tasks";
+import { notifyTaskAssigned } from "@/lib/notify";
 
-export async function PATCH(req, { params }) {
-  const { user, response } = await requireUser();
-  if (response) return response;
-  await connectDB();
-  const { id } = await params;
-  const body = await req.json();
-
+async function load(id, user) {
   const task = await Task.findById(id);
-  if (!task) return fail("Sarcina inexistenta", 404);
+  if (!task) throw notFound("Sarcina nu există");
+  const own = String(task.assignedTo) === String(user.id) || String(task.createdBy) === String(user.id);
+  if (user.role !== "admin" && !own) throw forbidden();
+  return task;
+}
 
-  const isOwner =
-    String(task.assignedTo) === String(user.id) ||
-    String(task.createdBy) === String(user.id);
-  if (user.role !== "admin" && !isOwner) return fail("Acces interzis", 403);
-
-  // Managerul poate schimba doar statusul; adminul poate edita tot
-  if (body.status) task.status = body.status;
-  if (user.role === "admin") {
-    if (body.title != null) task.title = body.title;
-    if (body.description != null) task.description = body.description;
-    if (body.priority != null) task.priority = body.priority;
-    if (body.dueDate != null)
-      task.dueDate = body.dueDate ? new Date(body.dueDate) : null;
-    if (body.assignedTo != null) task.assignedTo = body.assignedTo;
+export const PATCH = route(async ({ req, params, user }) => {
+  const b = await readJson(req);
+  const task = await load(params.id, user);
+  const canEdit = user.role === "admin" || String(task.createdBy) === String(user.id);
+  if (b.status) {
+    if (!["todo", "in_progress", "done"].includes(b.status)) throw badRequest("Status invalid");
+    task.status = b.status;
+    task.completedAt = b.status === "done" ? new Date() : undefined;
+  }
+  let reassigned = false;
+  if (canEdit) {
+    if (b.title != null) task.title = b.title;
+    if (b.description != null) task.description = b.description;
+    if (b.priority != null) task.priority = b.priority;
+    if (b.dueDate !== undefined) task.dueDate = b.dueDate ? new Date(b.dueDate) : undefined;
+    if (b.customer !== undefined) task.customer = b.customer || undefined;
+    if (b.order !== undefined) task.order = b.order || undefined;
+    if (b.assignedTo && String(b.assignedTo) !== String(task.assignedTo)) {
+      if (user.role !== "admin") throw forbidden("Doar administratorul poate reatribui sarcini");
+      if (!(await User.exists({ _id: b.assignedTo, active: true }))) throw badRequest("Utilizator inexistent");
+      task.assignedTo = b.assignedTo;
+      reassigned = true;
+    }
   }
   await task.save();
-  const populated = await Task.findById(task._id)
-    .populate("assignedTo", "name email")
-    .populate("createdBy", "name email");
-  return ok(populated);
-}
+  const populated = await populateTask(Task.findById(task._id)).lean();
+  if (reassigned) await notifyTaskAssigned(populated, user.id).catch(() => {});
+  return populated;
+});
 
-export async function DELETE(req, { params }) {
-  const { user, response } = await requireUser();
-  if (response) return response;
-  await connectDB();
-  const { id } = await params;
-  const task = await Task.findById(id);
-  if (!task) return fail("Sarcina inexistenta", 404);
-  if (user.role !== "admin" && String(task.createdBy) !== String(user.id)) {
-    return fail("Acces interzis", 403);
-  }
+export const DELETE = route(async ({ params, user }) => {
+  const task = await load(params.id, user);
+  if (user.role !== "admin" && String(task.createdBy) !== String(user.id)) throw forbidden();
   await task.deleteOne();
-  return ok({ deleted: true });
-}
+  return { deleted: true };
+});

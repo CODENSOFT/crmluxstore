@@ -1,35 +1,49 @@
-import connectDB from "@/lib/mongodb";
 import Warehouse from "@/models/Warehouse";
 import Product from "@/models/Product";
-import { ok, fail, requireUser } from "@/lib/api";
+import StockMovement from "@/models/StockMovement";
+import { route, readJson, badRequest, notFound } from "@/lib/api";
+import { logAudit } from "@/lib/audit";
+import { getSettingsDoc, invalidateSettings } from "@/lib/settings";
 
-export async function PATCH(req, { params }) {
-  const { response } = await requireUser();
-  if (response) return response;
-  await connectDB();
-  const { id } = await params;
-  const body = await req.json();
-  const wh = await Warehouse.findByIdAndUpdate(id, body, { new: true });
-  if (!wh) return fail("Depozit inexistent", 404);
-  return ok(wh);
-}
+export const PATCH = route(
+  async ({ req, params, user }) => {
+    const body = await readJson(req);
+    const w = await Warehouse.findById(params.id);
+    if (!w) throw notFound("Depozitul nu există");
+    for (const f of ["name", "code", "type", "address", "note", "syncToSite", "active", "externalId"]) {
+      if (body[f] !== undefined) w[f] = body[f];
+    }
+    if (body.isDefault) {
+      w.isDefault = true;
+      await Warehouse.updateMany({ _id: { $ne: w._id } }, { $set: { isDefault: false } });
+      const s = await getSettingsDoc();
+      s.defaultWarehouse = w._id;
+      await s.save();
+      invalidateSettings();
+    }
+    await w.save();
+    await logAudit({ action: "warehouse_edited", category: "warehouse", entity: w, entityName: w.name, user });
+    return w;
+  },
+  { auth: "admin" }
+);
 
-export async function DELETE(req, { params }) {
-  const { response } = await requireUser();
-  if (response) return response;
-  await connectDB();
-  const { id } = await params;
-
-  // Nu permitem stergerea daca exista stoc in acest depozit
-  const withStock = await Product.findOne({
-    stock: { $elemMatch: { warehouse: id, quantity: { $gt: 0 } } },
-  });
-  if (withStock) {
-    return fail(
-      "Depozitul contine produse pe stoc. Transferati sau anulati stocul intai."
-    );
-  }
-
-  await Warehouse.findByIdAndDelete(id);
-  return ok({ deleted: true });
-}
+export const DELETE = route(
+  async ({ params, user }) => {
+    const w = await Warehouse.findById(params.id);
+    if (!w) throw notFound("Depozitul nu există");
+    if (await Product.exists({ stock: { $elemMatch: { warehouse: w._id, quantity: { $gt: 0 } } } }))
+      throw badRequest("Depozitul conține stoc. Transferați sau casați stocul înainte de ștergere.");
+    if (await StockMovement.exists({ warehouse: w._id })) {
+      w.active = false;
+      w.isDefault = false;
+      await w.save();
+      return { deleted: false, deactivated: true };
+    }
+    await Product.updateMany({}, { $pull: { stock: { warehouse: w._id } } });
+    await w.deleteOne();
+    await logAudit({ action: "warehouse_deleted", category: "warehouse", entityName: w.name, user });
+    return { deleted: true };
+  },
+  { auth: "admin" }
+);

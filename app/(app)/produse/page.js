@@ -1,567 +1,312 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  apiGet,
-  apiPost,
-  apiPatch,
-  apiDelete,
-  money,
-  UNIT_LABELS,
-} from "@/lib/client";
-import {
-  Button,
-  Card,
-  Field,
-  Input,
-  Textarea,
-  Select,
-  Modal,
-  Badge,
-  Empty,
-  PageHeader,
-  useToast,
-} from "@/app/_components/ui";
-import { Icon } from "@/app/_components/icons";
+import { Suspense, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useApi, qs } from "@/lib/useApi";
+import { useQueryState } from "@/lib/useQueryState";
+import { useUser } from "@/app/_components/user";
+import { money, num, pct } from "@/lib/format";
+import { UNIT_LABELS } from "@/lib/constants";
+import { Card, PageHeader, Button, Select, SearchInput, Badge, EmptyState, Segmented, Dot, cx, Skeleton } from "@/app/_components/ui";
+import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
+import { Menu } from "@/app/_components/overlay";
+import { Plus, DownloadSimple, UploadSimple, Package, Rows, SquaresFour, ImageIcon, Tag, DotsThree } from "@/app/_components/icons";
+import { ProductForm } from "./_form";
+import { ImportDrawer, CategoriesModal } from "./_tools";
 
-const UNITS = ["bucata", "kg", "litri", "metru"];
+const STOCK = { in: { tone: "ok", label: "În stoc" }, low: { tone: "warn", label: "Stoc mic" }, out: { tone: "bad", label: "Fără stoc" } };
 
-// Redimensioneaza imaginea in browser si o transforma in data URL (base64) compact
-function fileToResizedDataURL(file, max = 600) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, max / Math.max(img.width, img.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.8));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+function Thumb({ p, size = 40 }) {
+  return (
+    <span className="flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface-2" style={{ width: size, height: size }}>
+      {p.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={p.photoUrl} alt="" loading="lazy" className="h-full w-full object-contain" />
+      ) : (
+        <ImageIcon size={size * 0.42} className="text-fg-4" />
+      )}
+    </span>
+  );
 }
 
-const EMPTY = {
-  name: "",
-  description: "",
-  sku: "",
-  unit: "bucata",
-  price: "",
-  warehouse: "",
-  quantity: "",
-  photo: "",
-  isComposite: false,
-  components: [],
+const marginOf = (p) => {
+  if (!(p.price > 0 && p.costPrice > 0)) return null;
+  const net = p.price / (1 + (p.vatRate ?? 20) / 100);
+  return ((net - p.costPrice) / net) * 100;
 };
 
-export default function ProductsPage() {
-  const toast = useToast();
-  const [list, setList] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY);
-  const [editId, setEditId] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [q, setQ] = useState("");
+function ProductsInner() {
+  const router = useRouter();
+  const user = useUser();
+  const isAdmin = user.role === "admin";
+  const [f, setF] = useQueryState({ page: "1", sort: "name", view: "table", active: "1" });
+  const [formState, setForm] = useState(false);
+  const form = formState || f.nou === "1";
+  const [importing, setImporting] = useState(false);
+  const [cats, setCats] = useState(false);
+  const params = { q: f.q, category: f.category, brand: f.brand, status: f.status, warehouse: f.warehouse, sort: f.sort, active: f.active, page: f.page, limit: 48 };
+  const { data, loading, error, reload } = useApi(`/api/products${qs(params)}`);
+  const { data: categories } = useApi("/api/categories");
+  const { data: warehouses } = useApi("/api/warehouses");
 
-  // Incarcari independente: o eroare la produse NU mai blocheaza depozitele
-  async function loadProducts() {
-    try {
-      setList(await apiGet("/api/products"));
-    } catch (e) {
-      toast(e.message, "error");
-    }
-  }
-  async function loadWarehouses() {
-    try {
-      setWarehouses(await apiGet("/api/warehouses"));
-    } catch {
-      /* depozitele lipsa nu blocheaza pagina */
-    }
-  }
-  async function load() {
-    await Promise.all([loadProducts(), loadWarehouses()]);
-  }
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function onPhoto(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const data = await fileToResizedDataURL(file);
-      setForm((f) => ({ ...f, photo: data }));
-    } catch {
-      toast("Nu am putut incarca imaginea", "error");
-    }
-  }
-
-  function openCreate() {
-    setEditId(null);
-    setForm(EMPTY);
-    loadWarehouses(); // depozite proaspete (poate ai adaugat unul intre timp)
-    setOpen(true);
-  }
-
-  function openEdit(p) {
-    setEditId(p._id);
-    // Pre-completam cu primul depozit + cantitatea lui (ca sa poti edita stocul)
-    const firstStock = (p.stock || [])[0];
-    setForm({
-      name: p.name || "",
-      description: p.description || "",
-      sku: p.sku || "",
-      unit: p.unit || "bucata",
-      price: p.price ?? "",
-      warehouse: firstStock?.warehouse?._id || firstStock?.warehouse || "",
-      quantity: firstStock ? String(firstStock.quantity) : "",
-      photo: p.photo || "",
-      isComposite: !!p.isComposite,
-      components: (p.components || []).map((c) => ({
-        product: c.product?._id || c.product,
-        quantity: String(c.quantity),
-      })),
-    });
-    loadWarehouses();
-    setOpen(true);
-  }
-
-  // Componente produs compus
-  function addComponent() {
-    setForm((f) => ({
-      ...f,
-      components: [...f.components, { product: "", quantity: "1" }],
-    }));
-  }
-  function setComponent(i, patch) {
-    setForm((f) => ({
-      ...f,
-      components: f.components.map((c, idx) =>
-        idx === i ? { ...c, ...patch } : c
+  const columns = [
+    {
+      key: "name",
+      header: "Produs",
+      render: (p) => (
+        <div className="flex min-w-[240px] items-center gap-3">
+          <Thumb p={p} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate font-medium text-fg">{p.name}</span>
+              {p.isComposite && <Badge tone="violet">Set</Badge>}
+              {p.active === false && <Badge tone="bad">Inactiv</Badge>}
+            </div>
+            <div className="truncate text-[12px] text-fg-3">{[p.sku, p.brand, p.packaging].filter(Boolean).join(" · ") || "—"}</div>
+          </div>
+        </div>
       ),
-    }));
-  }
-  function removeComponent(i) {
-    setForm((f) => ({
-      ...f,
-      components: f.components.filter((_, idx) => idx !== i),
-    }));
-  }
+    },
+    {
+      key: "category",
+      header: "Categorie",
+      className: "hidden lg:table-cell",
+      headClassName: "hidden lg:table-cell",
+      render: (p) => <span className="text-[12.5px] text-fg-2">{p.categoryName || <span className="text-fg-4">—</span>}</span>,
+    },
+    {
+      key: "price",
+      header: "Preț",
+      align: "right",
+      sort: "price",
+      render: (p) => (
+        <div className="whitespace-nowrap">
+          <div className="tnum font-medium text-fg">{money(p.price)}</div>
+          {p.wholesalePrice > 0 && <div className="tnum text-[12px] text-fg-3">angro {money(p.wholesalePrice)}</div>}
+        </div>
+      ),
+    },
+    {
+      key: "margin",
+      header: "Marjă",
+      align: "right",
+      className: "hidden xl:table-cell",
+      headClassName: "hidden xl:table-cell",
+      render: (p) => {
+        const m = marginOf(p);
+        return m == null ? <span className="text-fg-4">—</span> : <span className={cx("tnum text-[12.5px]", m < 15 ? "text-warn" : "text-fg-2")}>{pct(m, 0)}</span>;
+      },
+    },
+    {
+      key: "stock",
+      header: f.warehouse ? "Stoc depozit" : "Stoc",
+      align: "right",
+      sort: "stock",
+      render: (p) => (
+        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+          <Dot tone={STOCK[p.stockStatus]?.tone} />
+          <span className={cx("tnum font-medium", p.stockStatus === "out" ? "text-bad" : p.stockStatus === "low" ? "text-warn" : "text-fg")}>{num(p.totalStock)}</span>
+          <span className="text-[12px] text-fg-3">{UNIT_LABELS[p.unit]}</span>
+        </div>
+      ),
+    },
+  ];
 
-  async function save(e) {
-    e.preventDefault();
-    if (form.isComposite) {
-      const valid = form.components.filter(
-        (c) => c.product && Number(c.quantity) > 0
-      );
-      if (valid.length === 0) {
-        toast("Adaugati cel putin un produs in compozitie", "error");
-        return;
-      }
-    }
-    setLoading(true);
-    try {
-      const components = form.components
-        .filter((c) => c.product && Number(c.quantity) > 0)
-        .map((c) => ({ product: c.product, quantity: Number(c.quantity) }));
-      if (editId) {
-        await apiPatch(`/api/products/${editId}`, {
-          name: form.name,
-          description: form.description,
-          sku: form.sku,
-          unit: form.unit,
-          price: form.price,
-          photo: form.photo,
-          isComposite: form.isComposite,
-          components,
-          // Editare stoc pe depozitul ales
-          warehouse: form.warehouse || undefined,
-          quantity: form.warehouse !== "" ? form.quantity : undefined,
-        });
-        toast("Produs actualizat");
-      } else {
-        await apiPost("/api/products", { ...form, components });
-        toast("Produs adaugat");
-      }
-      setOpen(false);
-      setForm(EMPTY);
-      setEditId(null);
-      load();
-    } catch (e) {
-      toast(e.message, "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function remove(id) {
-    if (!confirm("Stergeti produsul?")) return;
-    try {
-      await apiDelete(`/api/products/${id}`);
-      toast("Produs sters");
-      load();
-    } catch (e) {
-      toast(e.message, "error");
-    }
-  }
-
-  const filtered = list.filter((p) =>
-    p.name.toLowerCase().includes(q.toLowerCase())
-  );
+  const filtered = f.q || f.category || f.brand || f.status || f.warehouse;
 
   return (
-    <div>
+    <div className="animate-in">
       <PageHeader
         title="Produse"
-        subtitle="Catalogul de produse chimice si echipamente."
-        action={
-          <Button onClick={openCreate}>
-            <Icon name="plus" className="h-4 w-4" strokeWidth={2} />
-            Produs nou
-          </Button>
-        }
-      />
-
-      <div className="mb-4 max-w-sm">
-        <Input
-          placeholder="Cauta produs…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-      </div>
-
-      {filtered.length === 0 ? (
-        <Card>
-          <Empty>Niciun produs. Adaugati primul produs in catalog.</Empty>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filtered.map((p) => {
-            const total = (p.stock || []).reduce(
-              (s, x) => s + (x.quantity || 0),
-              0
-            );
-            return (
-              <Card key={p._id} className="overflow-hidden">
-                <div className="flex h-36 items-center justify-center bg-slate-100">
-                  {p.photo ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.photo}
-                      alt={p.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <Icon
-                      name="package"
-                      className="h-12 w-12 text-slate-300"
-                      strokeWidth={1.3}
-                    />
-                  )}
-                </div>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-slate-800">{p.name}</h3>
-                    <Badge color={total === 0 ? "red" : "green"}>
-                      {total} {UNIT_LABELS[p.unit]}
-                    </Badge>
-                  </div>
-                  {p.description && (
-                    <p className="mt-1 line-clamp-2 text-xs text-slate-500">
-                      {p.description}
-                    </p>
-                  )}
-                  <div className="mt-2 text-sm font-semibold text-indigo-600">
-                    {money(p.price)}
-                    <span className="font-normal text-slate-400">
-                      {" "}
-                      / {UNIT_LABELS[p.unit]}
-                    </span>
-                  </div>
-
-                  {p.isComposite && p.components?.length > 0 && (
-                    <div className="mt-2 rounded-lg bg-indigo-50/60 px-2.5 py-2">
-                      <div className="mb-1 flex items-center gap-1 text-xs font-medium text-indigo-700">
-                        <Icon name="package" className="h-3.5 w-3.5" />
-                        Compus din
-                      </div>
-                      <ul className="space-y-0.5 text-xs text-slate-600">
-                        {p.components.map((c, i) => (
-                          <li key={i} className="flex justify-between">
-                            <span className="truncate">{c.productName}</span>
-                            <span className="ml-2 shrink-0 font-medium">
-                              × {c.quantity}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {p.stock?.length > 0 && (
-                    <div className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
-                      {p.stock.map((s, i) => (
-                        <div key={i} className="flex justify-between">
-                          <span>{s.warehouse?.name || "Depozit"}</span>
-                          <span className="font-medium">{s.quantity}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-3 flex justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEdit(p)}
-                    >
-                      <Icon name="edit" className="h-4 w-4" />
-                      Editeaza
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => remove(p._id)}
-                    >
-                      <Icon name="trash" className="h-4 w-4" />
-                      Sterge
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title={editId ? "Editeaza produs" : "Produs nou"}
-        width="max-w-2xl"
-        footer={
+        description="Catalogul magazinului: chimie auto, spumă activă, detailing, parfumuri, echipamente și piese pentru spălătorii."
+        actions={
           <>
-            <Button variant="secondary" onClick={() => setOpen(false)}>
-              Anuleaza
-            </Button>
-            <Button onClick={save} disabled={loading}>
-              {loading
-                ? "Se salveaza…"
-                : editId
-                  ? "Salveaza modificarile"
-                  : "Salveaza produs"}
+            <Menu
+              trigger={<Button icon={DotsThree}>Instrumente</Button>}
+              items={[
+                isAdmin && { label: "Import din Excel / CSV", icon: UploadSimple, onClick: () => setImporting(true) },
+                { label: "Export în Excel (CSV)", icon: DownloadSimple, download: true, href: `/api/products${qs({ ...params, page: undefined, limit: undefined, format: "csv" })}` },
+                isAdmin && { label: "Gestionare categorii", icon: Tag, onClick: () => setCats(true) },
+              ]}
+            />
+            <Button variant="primary" icon={Plus} onClick={() => setForm(true)}>
+              Produs nou
             </Button>
           </>
         }
-      >
-        <form onSubmit={save} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Field label="Denumire" required>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="ex: Sampon auto activ 5L"
-                required
-              />
-            </Field>
-          </div>
+      />
 
-          <div className="sm:col-span-2">
-            <Field label="Descriere">
-              <Textarea
-                value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
-                placeholder="Detalii optionale despre produs"
-              />
-            </Field>
-          </div>
-
-          <Field label="Cod produs (SKU)">
-            <Input
-              value={form.sku}
-              onChange={(e) => setForm({ ...form, sku: e.target.value })}
-              placeholder="optional"
-            />
-          </Field>
-
-          <Field label="Unitate de masura" required>
-            <Select
-              value={form.unit}
-              onChange={(e) => setForm({ ...form, unit: e.target.value })}
+      <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {[{ _id: "", name: "Toate", productCount: null }, ...(categories || [])].map((c) => {
+          const active = (f.category || "") === c._id;
+          return (
+            <button
+              key={c._id || "all"}
+              type="button"
+              onClick={() => setF({ category: c._id })}
+              className={cx(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium ring-1 ring-inset transition-colors",
+                active ? "bg-fg text-bg ring-fg" : "bg-surface text-fg-2 ring-line hover:ring-line-strong"
+              )}
             >
-              {UNITS.map((u) => (
-                <option key={u} value={u}>
-                  {UNIT_LABELS[u]}
+              {c.name}
+              {c.productCount != null && <span className={cx("tnum text-[11.5px]", active ? "text-bg/70" : "text-fg-4")}>{c.productCount}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      <Card className="overflow-hidden">
+        <Toolbar>
+          <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Denumire, SKU, cod de bare, marcă…" className="w-full sm:w-72" />
+          <Select value={f.status || ""} onChange={(e) => setF({ status: e.target.value })} className="w-[150px]">
+            <option value="">Orice stoc</option>
+            <option value="in">În stoc</option>
+            <option value="low">Stoc mic</option>
+            <option value="out">Fără stoc</option>
+          </Select>
+          {data?.brands?.length > 0 && (
+            <Select value={f.brand || ""} onChange={(e) => setF({ brand: e.target.value })} className="w-[160px]">
+              <option value="">Toate mărcile</option>
+              {data.brands.map((b) => (
+                <option key={b} value={b}>
+                  {b}
                 </option>
               ))}
             </Select>
-          </Field>
-
-          <Field label="Pret pe unitate">
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-              placeholder="0.00"
+          )}
+          {warehouses?.length > 1 && (
+            <Select value={f.warehouse || ""} onChange={(e) => setF({ warehouse: e.target.value })} className="w-[170px]">
+              <option value="">Toate depozitele</option>
+              {warehouses.map((w) => (
+                <option key={w._id} value={w._id}>
+                  {w.name}
+                </option>
+              ))}
+            </Select>
+          )}
+          <Select value={f.active} onChange={(e) => setF({ active: e.target.value })} className="w-[130px]">
+            <option value="1">Active</option>
+            <option value="0">Inactive</option>
+            <option value="">Toate</option>
+          </Select>
+          <div className="ml-auto flex items-center gap-2">
+            <Select value={f.sort} onChange={(e) => setF({ sort: e.target.value })} className="w-[170px]">
+              <option value="name">Denumire A–Z</option>
+              <option value="-createdAt">Cele mai noi</option>
+              <option value="price">Preț crescător</option>
+              <option value="-price">Preț descrescător</option>
+              <option value="stock">Stoc crescător</option>
+              <option value="-stock">Stoc descrescător</option>
+            </Select>
+            <Segmented
+              size="sm"
+              value={f.view}
+              onChange={(v) => setF({ view: v }, { resetPage: false })}
+              options={[
+                { value: "table", icon: Rows, title: "Tabel" },
+                { value: "grid", icon: SquaresFour, title: "Galerie" },
+              ]}
             />
-          </Field>
-
-          <Field label="Fotografie">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={onPhoto}
-              className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-indigo-600"
-            />
-            {form.photo && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={form.photo}
-                alt="preview"
-                className="mt-2 h-20 w-20 rounded-lg object-cover"
-              />
-            )}
-          </Field>
-
-          {/* Tip produs: simplu sau compus din alte produse */}
-          <div className="sm:col-span-2">
-            <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-              <input
-                type="checkbox"
-                checked={form.isComposite}
-                onChange={(e) =>
-                  setForm({ ...form, isComposite: e.target.checked })
-                }
-                className="h-4 w-4"
-              />
-              <span className="text-sm font-medium text-slate-700">
-                Produs compus din alte produse (set/kit)
-              </span>
-            </label>
-
-            {form.isComposite && (
-              <div className="mt-2 rounded-lg bg-indigo-50/60 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-600">
-                    Compus din:
-                  </span>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={addComponent}
-                  >
-                    <Icon name="plus" className="h-3.5 w-3.5" strokeWidth={2} />
-                    Adauga produs
-                  </Button>
-                </div>
-                <div className="space-y-2">
-                  {form.components.length === 0 && (
-                    <p className="text-xs text-slate-400">
-                      Adaugati produsele din care e alcatuit.
-                    </p>
-                  )}
-                  {form.components.map((c, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Select
-                        value={c.product}
-                        onChange={(e) =>
-                          setComponent(i, { product: e.target.value })
-                        }
-                        className="flex-1"
-                      >
-                        <option value="">— alege produs —</option>
-                        {list
-                          .filter((p) => p._id !== editId)
-                          .map((p) => (
-                            <option key={p._id} value={p._id}>
-                              {p.name}
-                            </option>
-                          ))}
-                      </Select>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={c.quantity}
-                        onChange={(e) =>
-                          setComponent(i, { quantity: e.target.value })
-                        }
-                        placeholder="Cant."
-                        className="w-24"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeComponent(i)}
-                        className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500"
-                      >
-                        <Icon name="x" className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
+        </Toolbar>
 
-          <div className="sm:col-span-2">
-            <div className="rounded-lg bg-slate-50 p-3">
-              <p className="mb-2 text-xs font-medium text-slate-500">
-                {editId
-                  ? "Stoc pe depozit — alege depozitul si seteaza cantitatea"
-                  : "Stoc initial (optional) — adauga produsul direct intr-un depozit"}
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Depozit">
-                  <Select
-                    value={form.warehouse}
-                    onChange={(e) =>
-                      setForm({ ...form, warehouse: e.target.value })
-                    }
-                  >
-                    <option value="">— alege depozit —</option>
-                    {warehouses.map((w) => (
-                      <option key={w._id} value={w._id}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Cantitate">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.quantity}
-                    onChange={(e) =>
-                      setForm({ ...form, quantity: e.target.value })
-                    }
-                    placeholder="0"
-                  />
-                </Field>
-              </div>
-              {warehouses.length === 0 && (
-                <p className="mt-2 text-xs text-amber-600">
-                  Nu exista depozite. Creati intai un depozit.
-                </p>
-              )}
+        {f.view === "grid" ? (
+          loading && !data ? (
+            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 xl:grid-cols-5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <Skeleton key={i} className="h-56" />
+              ))}
             </div>
-          </div>
-        </form>
-      </Modal>
+          ) : data?.items?.length ? (
+            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+              {data.items.map((p) => (
+                <Link key={p._id} href={`/produse/${p._id}`} className="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface transition-shadow hover:shadow-md">
+                  <div className="flex aspect-square items-center justify-center bg-surface-2">
+                    {p.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.photoUrl} alt={p.name} loading="lazy" className="h-full w-full object-contain p-3 transition-transform group-hover:scale-[1.03]" />
+                    ) : (
+                      <ImageIcon size={34} className="text-fg-4" />
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col p-3">
+                    <div className="line-clamp-2 text-[13px] font-medium leading-snug text-fg">{p.name}</div>
+                    <div className="mt-0.5 truncate text-[11.5px] text-fg-3">{p.sku || p.brand || p.categoryName || "—"}</div>
+                    <div className="mt-auto flex items-end justify-between pt-2">
+                      <span className="tnum text-[13.5px] font-semibold text-fg">{money(p.price)}</span>
+                      <Badge tone={STOCK[p.stockStatus]?.tone}>{num(p.totalStock)} {UNIT_LABELS[p.unit]}</Badge>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={Package} title="Niciun produs găsit" />
+          )
+        ) : (
+          <DataTable
+            columns={columns}
+            rows={data?.items}
+            loading={loading}
+            error={error}
+            onRetry={reload}
+            sort={f.sort}
+            onSort={(s) => setF({ sort: s })}
+            rowHref={(p) => `/produse/${p._id}`}
+            mobile={(p) => (
+              <div className="flex items-center gap-3">
+                <Thumb p={p} size={44} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13.5px] font-medium text-fg">{p.name}</div>
+                  <div className="truncate text-[12px] text-fg-3">{p.sku || p.brand || "—"}</div>
+                </div>
+                <div className="text-right">
+                  <div className="tnum text-[13px] font-medium text-fg">{money(p.price)}</div>
+                  <div className={cx("tnum text-[12px]", p.stockStatus === "out" ? "text-bad" : p.stockStatus === "low" ? "text-warn" : "text-fg-3")}>
+                    {num(p.totalStock)} {UNIT_LABELS[p.unit]}
+                  </div>
+                </div>
+              </div>
+            )}
+            empty={
+              <EmptyState
+                icon={Package}
+                title={filtered ? "Niciun produs nu corespunde filtrelor" : "Catalogul este gol"}
+                description={filtered ? "Modificați căutarea." : "Adăugați produse manual, importați din Excel sau din site (Integrări → Site)."}
+                action={
+                  !filtered && (
+                    <div className="flex gap-2">
+                      {isAdmin && (
+                        <Button size="sm" icon={UploadSimple} onClick={() => setImporting(true)}>
+                          Import
+                        </Button>
+                      )}
+                      <Button size="sm" variant="primary" icon={Plus} onClick={() => setForm(true)}>
+                        Produs nou
+                      </Button>
+                    </div>
+                  )
+                }
+              />
+            }
+          />
+        )}
+        <Pagination page={Number(f.page) || 1} limit={48} total={data?.total || 0} onChange={(p) => setF({ page: p }, { resetPage: false })} />
+      </Card>
+
+      <ProductForm open={form} onClose={() => { setForm(false); if (f.nou) setF({ nou: "" }); }} onSaved={(p) => router.push(`/produse/${p._id}`)} />
+      <ImportDrawer open={importing} onClose={() => setImporting(false)} />
+      <CategoriesModal open={cats} onClose={() => setCats(false)} />
     </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense>
+      <ProductsInner />
+    </Suspense>
   );
 }

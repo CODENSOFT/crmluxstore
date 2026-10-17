@@ -1,213 +1,154 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { apiGet, apiPost, formatDateTime, UNIT_LABELS } from "@/lib/client";
-import {
-  Button,
-  Card,
-  Field,
-  Input,
-  Textarea,
-  Select,
-  Badge,
-  Empty,
-  PageHeader,
-  useToast,
-} from "@/app/_components/ui";
-import { Icon } from "@/app/_components/icons";
+import { Suspense, useState } from "react";
+import { apiPost } from "@/lib/client";
+import { useApi, qs, invalidate } from "@/lib/useApi";
+import { useQueryState } from "@/lib/useQueryState";
+import { num, formatDateTime, relativeTime } from "@/lib/format";
+import { Card, PageHeader, Button, Select, SearchInput, Field, Textarea, EmptyState, Alert } from "@/app/_components/ui";
+import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
+import { Drawer, useToast } from "@/app/_components/overlay";
+import { Plus, ArrowsLeftRight, ArrowRight, Warning } from "@/app/_components/icons";
+import { DocLinesEditor, linesPayload, linesValid } from "../_stockdoc";
 
-function stockOf(product, warehouseId) {
-  if (!product || !warehouseId) return 0;
-  const e = (product.stock || []).find(
-    (s) => String(s.warehouse?._id || s.warehouse) === String(warehouseId)
-  );
-  return e ? e.quantity : 0;
+function TransferForm(props) {
+  return props.open ? <TransferFormBody {...props} /> : null;
 }
 
-export default function TransferPage() {
+function TransferFormBody({ open, onClose }) {
   const toast = useToast();
-  const [products, setProducts] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    product: "",
-    fromWarehouse: "",
-    toWarehouse: "",
-    quantity: "",
-    note: "",
-  });
+  const { data: products } = useApi("/api/products?light=1");
+  const { data: warehouses } = useApi("/api/warehouses");
+  const [fromSel, setFrom] = useState("");
+  const [toSel, setTo] = useState("");
+  const from = fromSel || (warehouses?.[0] ? String(warehouses[0]._id) : "");
+  const to = toSel || (warehouses?.[1] ? String(warehouses[1]._id) : "");
+  const [note, setNote] = useState("");
+  const [lines, setLines] = useState([]);
+  const [saving, setSaving] = useState(false);
 
-  async function load() {
+  const save = async () => {
+    setSaving(true);
     try {
-      const [p, w, h] = await Promise.all([
-        apiGet("/api/products?light=1"),
-        apiGet("/api/warehouses"),
-        apiGet("/api/transfers"),
-      ]);
-      setProducts(p);
-      setWarehouses(w);
-      setHistory(h);
-    } catch (e) {
-      toast(e.message, "error");
-    }
-  }
-  useEffect(() => {
-    load();
-  }, []);
-
-  const product = useMemo(
-    () => products.find((p) => p._id === form.product),
-    [products, form.product]
-  );
-  const available = stockOf(product, form.fromWarehouse);
-
-  async function submit(e) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await apiPost("/api/transfers", {
-        ...form,
-        quantity: Number(form.quantity),
-      });
-      toast("Transfer efectuat");
-      setForm({
-        product: "",
-        fromWarehouse: "",
-        toWarehouse: "",
-        quantity: "",
-        note: "",
-      });
-      load();
+      const d = await apiPost("/api/transfers", { fromWarehouse: from, toWarehouse: to, note, items: linesPayload(lines) });
+      toast(`Transferul ${d.number} a fost efectuat`);
+      invalidate("/api/transfers", "/api/products", "/api/stock");
+      onClose();
     } catch (e) {
       toast(e.message, "error");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  }
+  };
 
+  const valid = from && to && from !== to && linesValid(lines, { warehouse: from, checkStock: true, products });
   return (
-    <div>
-      <PageHeader
-        title="Transfer produse"
-        subtitle="Mutati o cantitate de produs intre depozite."
-      />
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="p-5 lg:col-span-1">
-          <form onSubmit={submit} className="space-y-4">
-            <Field label="Produs" required>
-              <Select
-                value={form.product}
-                onChange={(e) => setForm({ ...form, product: e.target.value })}
-                required
-              >
-                <option value="">— alege produs —</option>
-                {products.map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Din depozit" required>
-              <Select
-                value={form.fromWarehouse}
-                onChange={(e) =>
-                  setForm({ ...form, fromWarehouse: e.target.value })
-                }
-                required
-              >
-                <option value="">— sursa —</option>
-                {warehouses.map((w) => (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      width="max-w-2xl"
+      title="Transfer între depozite"
+      description="Mută marfa dintr-un depozit în altul (ex: din depozit în magazin)."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Renunță
+          </Button>
+          <Button variant="primary" icon={ArrowsLeftRight} loading={saving} disabled={!valid} onClick={save}>
+            Efectuează transferul
+          </Button>
+        </>
+      }
+    >
+      {warehouses && warehouses.length < 2 ? (
+        <Alert tone="warn" icon={Warning} title="Aveți un singur depozit">
+          Adăugați încă un depozit (ex: „Magazin Lunca Bîcului”) din pagina Depozite.
+        </Alert>
+      ) : (
+        <div className="-mx-5 space-y-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3 px-5">
+            <Field label="Din depozitul">
+              <Select value={from} onChange={(e) => setFrom(e.target.value)}>
+                {(warehouses || []).map((w) => (
                   <option key={w._id} value={w._id}>
                     {w.name}
                   </option>
                 ))}
               </Select>
-              {form.product && form.fromWarehouse && (
-                <span className="mt-1 block text-xs text-slate-400">
-                  Disponibil: {available} {product && UNIT_LABELS[product.unit]}
-                </span>
-              )}
             </Field>
-            <Field label="In depozit" required>
-              <Select
-                value={form.toWarehouse}
-                onChange={(e) =>
-                  setForm({ ...form, toWarehouse: e.target.value })
-                }
-                required
-              >
-                <option value="">— destinatie —</option>
-                {warehouses
-                  .filter((w) => w._id !== form.fromWarehouse)
-                  .map((w) => (
-                    <option key={w._id} value={w._id}>
-                      {w.name}
-                    </option>
-                  ))}
+            <ArrowRight size={18} className="mb-2.5 text-fg-3" />
+            <Field label="În depozitul">
+              <Select value={to} onChange={(e) => setTo(e.target.value)}>
+                {(warehouses || []).map((w) => (
+                  <option key={w._id} value={w._id} disabled={w._id === from}>
+                    {w.name}
+                  </option>
+                ))}
               </Select>
             </Field>
-            <Field label="Cantitate" required>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.quantity}
-                onChange={(e) =>
-                  setForm({ ...form, quantity: e.target.value })
-                }
-                required
-              />
-            </Field>
-            <Field label="Nota">
-              <Textarea
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-              />
-            </Field>
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Se transfera…" : "Efectueaza transfer"}
-            </Button>
-          </form>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
-            <Icon name="transfer" className="h-4 w-4 text-slate-400" />
-            <h2 className="font-semibold text-slate-800">Istoric transferuri</h2>
           </div>
-          {history.length === 0 ? (
-            <Empty>Niciun transfer inca.</Empty>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {history.map((t) => (
-                <div
-                  key={t._id}
-                  className="flex items-center gap-3 px-5 py-3.5"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
-                    <Icon name="transfer" className="h-[18px] w-[18px]" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-slate-700">
-                      {t.product?.name || t.productName}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      {t.fromWarehouse?.name} → {t.toWarehouse?.name} ·{" "}
-                      {formatDateTime(t.createdAt)}
-                    </div>
-                  </div>
-                  <Badge color="sky">
-                    {t.quantity} {t.product && UNIT_LABELS[t.product.unit]}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
+          <DocLinesEditor lines={lines} setLines={setLines} products={products} warehouse={from} checkStock />
+          <div className="px-5">
+            <Field label="Notă">
+              <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="ex: reaprovizionare raft magazin" />
+            </Field>
+          </div>
+        </div>
+      )}
+    </Drawer>
+  );
+}
+
+function Inner() {
+  const [f, setF] = useQueryState({ page: "1" });
+  const [open, setOpen] = useState(false);
+  const { data, loading, error, reload } = useApi(`/api/transfers${qs({ q: f.q, warehouse: f.warehouse, page: f.page, limit: 30 })}`);
+  const { data: warehouses } = useApi("/api/warehouses");
+  const columns = [
+    { key: "number", header: "Transfer", render: (d) => <div><div className="font-medium text-fg">{d.number || "—"}</div><div className="text-[12px] text-fg-3">{formatDateTime(d.createdAt)}</div></div> },
+    {
+      key: "route",
+      header: "Traseu",
+      render: (d) => (
+        <span className="inline-flex items-center gap-1.5 text-fg-2">
+          {d.fromWarehouse?.name} <ArrowRight size={13} className="text-fg-4" /> {d.toWarehouse?.name}
+        </span>
+      ),
+    },
+    { key: "items", header: "Produse", render: (d) => <div className="max-w-[360px] truncate text-[12.5px] text-fg-3">{d.items.map((l) => `${l.productName || l.product?.name} × ${num(l.quantity)}`).join(", ")}</div> },
+    { key: "by", header: "Efectuat de", align: "right", render: (d) => <span className="text-[12.5px] text-fg-3">{d.createdBy?.name || "—"} · {relativeTime(d.createdAt)}</span> },
+  ];
+  return (
+    <div className="animate-in">
+      <PageHeader
+        title="Transferuri"
+        description="Mutarea mărfii între depozite, magazin și mașina de livrare."
+        actions={<Button variant="primary" icon={Plus} onClick={() => setOpen(true)}>Transfer nou</Button>}
+      />
+      <Card className="overflow-hidden">
+        <Toolbar>
+          <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Număr sau produs…" className="w-full sm:w-64" />
+          <Select value={f.warehouse || ""} onChange={(e) => setF({ warehouse: e.target.value })} className="w-[180px]">
+            <option value="">Toate depozitele</option>
+            {(warehouses || []).map((w) => (
+              <option key={w._id} value={w._id}>
+                {w.name}
+              </option>
+            ))}
+          </Select>
+        </Toolbar>
+        <DataTable columns={columns} rows={data?.items} loading={loading} error={error} onRetry={reload} empty={<EmptyState icon={ArrowsLeftRight} title="Niciun transfer" action={<Button size="sm" variant="primary" icon={Plus} onClick={() => setOpen(true)}>Transfer nou</Button>} />} />
+        <Pagination page={Number(f.page) || 1} limit={30} total={data?.total || 0} onChange={(p) => setF({ page: p }, { resetPage: false })} />
+      </Card>
+      <TransferForm open={open} onClose={() => { setOpen(false); reload(); }} />
     </div>
+  );
+}
+
+export default function TransfersPage() {
+  return (
+    <Suspense>
+      <Inner />
+    </Suspense>
   );
 }

@@ -1,25 +1,33 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
-import { ToastProvider } from "@/app/_components/ui";
+import { getSessionUser } from "@/lib/auth";
+import { ToastProvider, ConfirmProvider } from "@/app/_components/overlay";
 import { UserProvider } from "@/app/_components/user";
 import Shell from "./_shell";
 
 export default async function AppLayout({ children }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-
-  const safeUser = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-  };
-
+  let user;
+  try {
+    user = await getSessionUser();
+  } catch (e) {
+    // Baza de date indisponibila: nu redirectionam (ar crea o bucla cu /login)
+    return (
+      <div className="flex min-h-dvh items-center justify-center p-6">
+        <div className="max-w-md rounded-2xl border border-line bg-surface p-6 text-center shadow-sm">
+          <p className="text-[15px] font-semibold text-fg">Serverul nu se poate conecta la baza de date</p>
+          <p className="mt-2 text-[13px] text-fg-3">{e?.message}</p>
+          <p className="mt-4 text-[13px] text-fg-3">Reîncărcați pagina peste câteva secunde.</p>
+        </div>
+      </div>
+    );
+  }
+  if (!user) redirect("/api/auth/logout");
   return (
     <ToastProvider>
-      <UserProvider user={safeUser}>
-        <Shell user={safeUser}>{children}</Shell>
-      </UserProvider>
+      <ConfirmProvider>
+        <UserProvider user={user}>
+          <Shell user={user}>{children}</Shell>
+        </UserProvider>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }

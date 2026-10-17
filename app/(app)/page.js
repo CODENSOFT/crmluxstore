@@ -1,282 +1,309 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { apiGet, money, formatDateTime } from "@/lib/client";
-import { Card, Badge, PageHeader, Empty } from "@/app/_components/ui";
-import { Icon } from "@/app/_components/icons";
+import { useApi } from "@/lib/useApi";
 import { useUser } from "@/app/_components/user";
-import { stageInfo } from "@/lib/orderStages";
+import { money, moneyShort, formatDateShort, relativeTime, num, pct, formatDate, plural } from "@/lib/format";
+import { channelLabel, UNIT_LABELS, TASK_PRIORITY } from "@/lib/constants";
+import { Card, CardHeader, Stat, PageHeader, ButtonLink, StageBadge, Badge, Skeleton, EmptyState, cx, Segmented, PaymentBadge } from "@/app/_components/ui";
+import { AreaChart, BarList, ColumnChart } from "@/app/_components/charts";
+import {
+  Plus, TrayArrowDown, Receipt, Coins, ChartLineUp, Wallet, Globe, Clock, PencilSimple, Warning, CheckSquareOffset,
+  ArrowRight, Package, UsersThree, Stack,
+} from "@/app/_components/icons";
 
-function Stat({ label, value, icon, href, tone }) {
-  const tones = {
-    amber: "bg-amber-50 text-amber-600",
-    emerald: "bg-emerald-50 text-emerald-600",
-    indigo: "bg-indigo-50 text-indigo-600",
-    violet: "bg-violet-50 text-violet-600",
-  };
-  const inner = (
-    <Card className="p-5 transition-shadow hover:shadow-md hover:shadow-slate-200/60">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-3xl font-bold tracking-tight text-slate-900">
-            {value}
-          </div>
-          <div className="mt-1 text-sm text-slate-500">{label}</div>
-        </div>
-        <span
-          className={`flex h-10 w-10 items-center justify-center rounded-xl ${tones[tone]}`}
-        >
-          <Icon name={icon} className="h-5 w-5" />
-        </span>
-      </div>
-    </Card>
-  );
-  return href ? <Link href={href}>{inner}</Link> : inner;
+function greeting() {
+  const h = Number(new Intl.DateTimeFormat("ro-RO", { hour: "numeric", hour12: false, timeZone: "Europe/Chisinau" }).format(new Date()));
+  if (h < 11) return "Bună dimineața";
+  if (h < 18) return "Bună ziua";
+  return "Bună seara";
 }
 
-// Grafic cu bare verticale (vanzari pe zile)
-function SalesChart({ data, currency }) {
-  const max = Math.max(1, ...data.map((d) => d.total));
+function AttentionItem({ href, icon: IconC, tone, title, text }) {
+  const tones = { warn: "bg-warn-soft text-warn", accent: "bg-accent-soft text-accent", bad: "bg-bad-soft text-bad", violet: "bg-violet-soft text-violet" };
   return (
-    <div className="flex h-40 items-end gap-1.5">
-      {data.map((d, i) => {
-        const h = (d.total / max) * 100;
-        const day = d.date.slice(8, 10);
-        return (
-          <div
-            key={i}
-            className="group flex flex-1 flex-col items-center gap-1"
-            title={`${d.date}: ${money(d.total, currency)}`}
-          >
-            <div className="flex h-32 w-full items-end">
-              <div
-                className="w-full rounded-t bg-indigo-500 transition-all group-hover:bg-indigo-600"
-                style={{ height: `${Math.max(h, d.total > 0 ? 4 : 0)}%` }}
-              />
-            </div>
-            <span className="text-[10px] text-slate-400">{day}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// Bare orizontale (top produse / stoc pe depozite)
-function HBars({ items, valueLabel, color = "indigo", currency }) {
-  const max = Math.max(1, ...items.map((i) => i.value));
-  const colors = {
-    indigo: "bg-indigo-500",
-    emerald: "bg-emerald-500",
-    violet: "bg-violet-500",
-  };
-  return (
-    <div className="space-y-2.5">
-      {items.map((it, i) => (
-        <div key={i}>
-          <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="truncate text-slate-600">{it.name}</span>
-            <span className="ml-2 shrink-0 font-medium text-slate-500">
-              {valueLabel ? valueLabel(it.value) : it.value}
-            </span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full ${colors[color]}`}
-              style={{ width: `${(it.value / max) * 100}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
+    <Link href={href} className="group flex min-w-[220px] flex-1 items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 shadow-xs transition-colors hover:border-line-strong">
+      <span className={cx("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", tones[tone])}>
+        <IconC size={18} weight="bold" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13.5px] font-semibold text-fg">{title}</span>
+        <span className="block truncate text-[12.5px] text-fg-3">{text}</span>
+      </span>
+      <ArrowRight size={15} className="shrink-0 text-fg-4 transition-transform group-hover:translate-x-0.5 group-hover:text-fg-2" />
+    </Link>
   );
 }
 
 export default function Dashboard() {
   const user = useUser();
-  const [s, setS] = useState(null);
-  const [err, setErr] = useState("");
+  const { data: d, loading } = useApi("/api/dashboard", { refreshInterval: 60000 });
+  const [metric, setMetric] = useState("revenue");
+  const cur = d?.currency || "MDL";
 
-  useEffect(() => {
-    apiGet("/api/stats").then(setS).catch((e) => setErr(e.message));
-  }, []);
+  const chart = useMemo(
+    () =>
+      (d?.chart || []).map((p) => ({
+        label: formatDateShort(p.date + "T12:00:00"),
+        tooltipLabel: formatDate(p.date + "T12:00:00"),
+        value: metric === "revenue" ? p.revenue : p.orders,
+        sub: metric === "revenue" ? `${p.orders} comenzi` : money(p.revenue, cur),
+      })),
+    [d, metric, cur]
+  );
 
-  if (err)
-    return <div className="rounded-lg bg-rose-50 p-4 text-rose-600">{err}</div>;
-  if (!s) return <div className="text-slate-400">Se incarca…</div>;
+  const delta =
+    d && d.prevMonth.revenue > 0 ? ((d.month.revenue - d.prevMonth.revenue) / d.prevMonth.revenue) * 100 : null;
+  const marginPct = d && d.month.items > 0 ? (d.month.profit / d.month.items) * 100 : 0;
+  const isAdmin = user.role === "admin";
+  const firstName = user.name.split(" ")[0];
+
+  const attention = [];
+  if (d?.counts.siteNew) attention.push({ href: "/comenzi?status=new&channel=site", icon: Globe, tone: "accent", title: `${plural(d.counts.siteNew, "comandă nouă", "comenzi noi", "de comenzi noi")} de pe site`, text: "Confirmați telefonic și treceți-le în pregătire" });
+  if (isAdmin && d?.counts.pending_approval) attention.push({ href: "/comenzi?status=pending_approval", icon: Clock, tone: "warn", title: `${d.counts.pending_approval} așteaptă aprobarea ta`, text: "Comenzi create de manageri" });
+  if (d && d.counts.new - d.counts.siteNew > 0) attention.push({ href: "/comenzi?status=new", icon: Receipt, tone: "violet", title: `${d.counts.new - d.counts.siteNew} comenzi noi (ciorne)`, text: "Neconfirmate încă" });
+  if (d?.lowStock.count) attention.push({ href: "/stoc?tab=reorder", icon: Warning, tone: "bad", title: `${plural(d.lowStock.count, "produs", "produse", "de produse")} sub stocul minim`, text: "Vezi lista de reaprovizionare" });
+  if (d?.overdueTasks) attention.push({ href: "/sarcini", icon: CheckSquareOffset, tone: "bad", title: `${plural(d.overdueTasks, "sarcină întârziată", "sarcini întârziate", "de sarcini întârziate")}`, text: "Termenul a trecut" });
 
   return (
-    <div>
+    <div className="animate-in">
       <PageHeader
-        title={`Bun venit, ${user?.name?.split(" ")[0] || ""}`}
-        subtitle="Privire de ansamblu asupra activitatii din magazin."
+        title={`${greeting()}, ${firstName}`}
+        description={
+          isAdmin
+            ? "Situația magazinului pe scurt — vânzări, comenzi de procesat, încasări și stoc."
+            : "Comenzile, clienții și sarcinile tale."
+        }
+        actions={
+          <>
+            <ButtonLink href="/receptie/nou" icon={TrayArrowDown} variant="secondary">
+              Recepție
+            </ButtonLink>
+            <ButtonLink href="/comenzi/nou" icon={Plus} variant="primary">
+              Comandă nouă
+            </ButtonLink>
+          </>
+        }
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat
-          label="Asteapta aprobare"
-          value={s.pendingOrders}
-          icon="clock"
-          tone="amber"
-          href="/comenzi?status=pending_approval"
-        />
-        <Stat
-          label="In procesare"
-          value={s.inProgressOrders}
-          icon="transfer"
-          tone="indigo"
-          href="/comenzi?status=processing"
-        />
-        <Stat
-          label="Comenzi complete"
-          value={s.completedOrders}
-          icon="checkCircle"
-          tone="emerald"
-          href="/comenzi?status=completed"
-        />
-        <Stat
-          label="Sarcini deschise"
-          value={s.openTasks}
-          icon="tasks"
-          tone="violet"
-          href="/sarcini"
-        />
-      </div>
-
-      {/* Grafice */}
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="p-5 lg:col-span-2">
-          <h2 className="mb-4 font-semibold text-slate-800">
-            Vanzari — ultimele 14 zile
-          </h2>
-          {s.salesByDay?.some((d) => d.total > 0) ? (
-            <SalesChart data={s.salesByDay} currency={s.currency} />
-          ) : (
-            <div className="flex h-40 items-center justify-center text-sm text-slate-400">
-              Nicio vanzare in ultimele 14 zile.
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="mb-4 font-semibold text-slate-800">Top produse</h2>
-          {s.topProducts?.length ? (
-            <HBars
-              items={s.topProducts.map((p) => ({ name: p.name, value: p.qty }))}
-              color="violet"
-            />
-          ) : (
-            <p className="text-sm text-slate-400">Inca nu exista vanzari.</p>
-          )}
-        </Card>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="p-5 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-800">Comenzi recente</h2>
-            <Link
-              href="/comenzi"
-              className="flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700"
-            >
-              Vezi toate
-              <Icon name="arrowRight" className="h-4 w-4" />
-            </Link>
-          </div>
-          {s.recentOrders.length === 0 ? (
-            <Empty>Nu exista comenzi inca.</Empty>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {s.recentOrders.map((o) => (
-                <Link
-                  key={o._id}
-                  href="/comenzi"
-                  className="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition-colors hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
-                      <Icon name="receipt" className="h-[18px] w-[18px]" />
-                    </span>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-700">
-                        {o.number}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {o.responsible?.name || "—"} ·{" "}
-                        {formatDateTime(o.createdAt)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-slate-700">
-                      {money(o.total, s.currency)}
-                    </span>
-                    <Badge color={stageInfo(o.status).color}>
-                      {stageInfo(o.status).short}
-                    </Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <div className="space-y-4">
-          <Card className="p-5">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                <Icon name="wallet" className="h-5 w-5" />
-              </span>
-              <h2 className="text-sm font-medium text-slate-500">
-                Valoare stoc total
-              </h2>
-            </div>
-            <div className="mt-3 text-2xl font-bold tracking-tight text-slate-900">
-              {money(s.inventoryValue, s.currency)}
-            </div>
-            <div className="mt-1 text-xs text-slate-400">
-              {s.warehouseCount} depozite active
-            </div>
-            {s.stockByWarehouse?.length > 0 && (
-              <div className="mt-4 border-t border-slate-100 pt-4">
-                <HBars
-                  items={s.stockByWarehouse}
-                  color="emerald"
-                  valueLabel={(v) => money(v, s.currency)}
-                />
-              </div>
-            )}
-          </Card>
-
-          <Card className="p-5">
-            <div className="mb-3 flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-                <Icon name="alert" className="h-5 w-5" />
-              </span>
-              <h2 className="font-semibold text-slate-800">Stoc scazut</h2>
-            </div>
-            {s.lowStock.length === 0 ? (
-              <p className="text-sm text-slate-400">
-                Toate produsele au stoc suficient.
-              </p>
-            ) : (
-              <ul className="space-y-2.5">
-                {s.lowStock.map((p) => (
-                  <li
-                    key={p._id}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span className="text-slate-600">{p.name}</span>
-                    <Badge color={p.total === 0 ? "red" : "yellow"}>
-                      {p.total} {p.unit}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+      {attention.length > 0 && (
+        <div className="mb-5 flex flex-wrap gap-3">
+          {attention.map((a) => (
+            <AttentionItem key={a.href} {...a} />
+          ))}
         </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat
+          label="Vânzări azi"
+          icon={Receipt}
+          loading={loading && !d}
+          value={moneyShort(d?.today.revenue, cur)}
+          sub={d ? `${d.today.orders} comenzi` : null}
+          href="/comenzi"
+        />
+        <Stat
+          label="Vânzări luna aceasta"
+          icon={ChartLineUp}
+          loading={loading && !d}
+          value={moneyShort(d?.month.revenue, cur)}
+          delta={delta}
+          sub={d ? `vs. aceeași perioadă luna trecută · ${d.month.orders} comenzi` : null}
+          href="/rapoarte"
+        />
+        <Stat
+          label="Marjă brută (luna)"
+          icon={Coins}
+          loading={loading && !d}
+          value={moneyShort(d?.month.profit, cur)}
+          sub={d ? `${pct(marginPct)} din vânzări · bon mediu ${moneyShort(d.month.avg, cur)}` : null}
+        />
+        <Stat
+          label="De încasat"
+          icon={Wallet}
+          tone={d?.debt.overdue > 0 ? "bad" : undefined}
+          loading={loading && !d}
+          value={moneyShort(d?.debt.amount, cur)}
+          sub={d ? (d.debt.overdue > 0 ? `${moneyShort(d.debt.overdue, cur)} cu termen depășit` : `${d.debt.orders} comenzi neachitate`) : null}
+          href="/rapoarte?tab=debts"
+        />
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader
+            title="Vânzări în ultimele 30 de zile"
+            description={metric === "revenue" ? "Valoarea comenzilor confirmate, pe zile" : "Numărul de comenzi confirmate, pe zile"}
+            action={
+              <Segmented
+                size="sm"
+                value={metric}
+                onChange={setMetric}
+                options={[
+                  { value: "revenue", label: "Valoare" },
+                  { value: "orders", label: "Comenzi" },
+                ]}
+              />
+            }
+          />
+          <div className="px-3 pb-3">
+            {loading && !d ? (
+              <Skeleton className="mx-2 h-[220px]" />
+            ) : metric === "revenue" ? (
+              <AreaChart data={chart} format={(v) => money(v, cur)} ariaLabel="Vânzări pe zile" />
+            ) : (
+              <ColumnChart data={chart} format={(v) => `${v} comenzi`} ariaLabel="Comenzi pe zile" />
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Canale de vânzare" description="Luna curentă, după valoare" />
+          <div className="px-5 pb-5">
+            {loading && !d ? (
+              <Skeleton className="h-40" />
+            ) : (
+              <BarList
+                items={(d?.byChannel || []).map((c) => ({ key: c._id, label: channelLabel(c._id), value: c.revenue, sub: `${c.orders}` }))}
+                format={(v) => moneyShort(v, cur)}
+              />
+            )}
+          </div>
+        </Card>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <Card>
+          <CardHeader title="Cele mai vândute produse" description="Luna curentă" icon={Package} action={<Link href="/rapoarte?tab=products" className="text-[12.5px] font-medium text-accent hover:underline">Raport</Link>} />
+          <div className="px-5 pb-5">
+            {loading && !d ? (
+              <Skeleton className="h-40" />
+            ) : (
+              <BarList
+                items={(d?.topProducts || []).map((p) => ({ key: p._id, label: p.name, value: p.revenue, sub: `${num(p.qty)} ${UNIT_LABELS[p.unit] || ""}` }))}
+                format={(v) => moneyShort(v, cur)}
+              />
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Clienți de top" description="Luna curentă" icon={UsersThree} action={<Link href="/clienti?sort=-spent" className="text-[12.5px] font-medium text-accent hover:underline">Toți</Link>} />
+          <ul className="divide-y divide-line px-2 pb-2">
+            {loading && !d && <Skeleton className="mx-3 mb-3 h-40" />}
+            {d && d.topCustomers.length === 0 && <p className="px-3 py-8 text-center text-[13px] text-fg-3">Nicio vânzare către clienți înregistrați luna aceasta.</p>}
+            {d?.topCustomers.map((c, i) => (
+              <li key={c._id}>
+                <Link href={`/clienti/${c._id}`} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-surface-2">
+                  <span className="tnum w-4 text-[12px] font-medium text-fg-4">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-fg">{c.name}</span>
+                  <span className="tnum text-[12.5px] text-fg-3">{c.orders} cmd.</span>
+                  <span className="tnum w-24 text-right text-[13px] font-medium text-fg">{moneyShort(c.revenue, cur)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        <Card className="lg:col-span-2 xl:col-span-1">
+          <CardHeader
+            title="Stoc critic"
+            description={d ? `Valoare stoc: ${moneyShort(d.stock.value, cur)} (cost ${moneyShort(d.stock.cost, cur)})` : "Produse sub pragul minim"}
+            icon={Stack}
+            action={<Link href="/stoc?tab=reorder" className="text-[12.5px] font-medium text-accent hover:underline">De comandat</Link>}
+          />
+          <ul className="divide-y divide-line px-2 pb-2">
+            {loading && !d && <Skeleton className="mx-3 mb-3 h-40" />}
+            {d && d.lowStock.items.length === 0 && (
+              <EmptyState compact icon={Stack} title="Stocul e în regulă" description="Niciun produs activ nu e sub pragul minim." />
+            )}
+            {d?.lowStock.items.map((p) => (
+              <li key={p._id}>
+                <Link href={`/produse/${p._id}`} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-surface-2">
+                  <span className={cx("h-2 w-2 shrink-0 rounded-full", p.total <= 0 ? "bg-bad" : "bg-warn")} />
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-fg">{p.name}</span>
+                  <span className={cx("tnum text-[13px] font-medium", p.total <= 0 ? "text-bad" : "text-warn")}>
+                    {num(p.total)} {UNIT_LABELS[p.unit] || ""}
+                  </span>
+                  <span className="tnum w-16 text-right text-[12px] text-fg-4">min {num(p.limit)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader title="Comenzi recente" action={<Link href="/comenzi" className="text-[12.5px] font-medium text-accent hover:underline">Toate comenzile</Link>} />
+          {loading && !d ? (
+            <Skeleton className="mx-5 mb-5 h-48" />
+          ) : d?.recentOrders.length ? (
+            <ul className="divide-y divide-line border-t border-line">
+              {d.recentOrders.map((o) => (
+                <li key={o._id}>
+                  <Link href={`/comenzi/${o._id}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2/70">
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="text-[13.5px] font-medium text-fg">{o.number}</span>
+                        <span className="text-[12px] text-fg-4">{channelLabel(o.channel)}</span>
+                      </span>
+                      <span className="block truncate text-[12.5px] text-fg-3">
+                        {o.customerName || "Fără client"} · {relativeTime(o.createdAt)}
+                      </span>
+                    </span>
+                    <span className="hidden sm:block">
+                      <PaymentBadge status={o.paymentStatus} />
+                    </span>
+                    <StageBadge status={o.status} short />
+                    <span className="tnum w-28 text-right text-[13.5px] font-medium text-fg">{money(o.total, cur)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              icon={Receipt}
+              title="Încă nu există comenzi"
+              description="Creați prima comandă sau conectați site-ul din Integrări."
+              action={
+                <ButtonLink href="/comenzi/nou" variant="primary" icon={Plus} size="sm">
+                  Comandă nouă
+                </ButtonLink>
+              }
+            />
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Sarcinile mele" icon={CheckSquareOffset} action={<Link href="/sarcini" className="text-[12.5px] font-medium text-accent hover:underline">Toate</Link>} />
+          {d && d.tasks.length === 0 ? (
+            <EmptyState compact icon={CheckSquareOffset} title="Nicio sarcină deschisă" description="Sarcinile atribuite ție apar aici." />
+          ) : (
+            <ul className="divide-y divide-line border-t border-line">
+              {d?.tasks.map((t) => {
+                const overdue = t.dueDate && new Date(t.dueDate) < new Date(new Date().toDateString());
+                const pr = TASK_PRIORITY.find((p) => p.key === t.priority);
+                return (
+                  <li key={t._id}>
+                    <Link href="/sarcini" className="flex items-start gap-3 px-5 py-3 hover:bg-surface-2/70">
+                      <PencilSimple size={15} className="mt-0.5 shrink-0 text-fg-4" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13.5px] text-fg">{t.title}</span>
+                        <span className={cx("block text-[12px]", overdue ? "font-medium text-bad" : "text-fg-3")}>
+                          {t.dueDate ? `${overdue ? "Întârziată · " : ""}${formatDate(t.dueDate)}` : "Fără termen"}
+                        </span>
+                      </span>
+                      {t.priority === "high" && <Badge tone={pr?.tone}>{pr?.label}</Badge>}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
       </div>
     </div>
   );

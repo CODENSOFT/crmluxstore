@@ -1,165 +1,169 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiGet, apiPost, apiDelete } from "@/lib/client";
-import {
-  Button,
-  Card,
-  Field,
-  Input,
-  Textarea,
-  Modal,
-  Empty,
-  PageHeader,
-  useToast,
-} from "@/app/_components/ui";
-import { Icon } from "@/app/_components/icons";
+import { useState } from "react";
+import Link from "next/link";
+import { apiDelete, apiPatch, apiPost } from "@/lib/client";
+import { useApi, invalidate } from "@/lib/useApi";
+import { useUser } from "@/app/_components/user";
+import { money, moneyShort, num } from "@/lib/format";
+import { WAREHOUSE_TYPES } from "@/lib/constants";
+import { Card, PageHeader, Button, Field, Input, Select, Textarea, Switch, Badge, EmptyState, Skeleton, cx } from "@/app/_components/ui";
+import { Modal, Menu, useConfirm, useToast } from "@/app/_components/overlay";
+import { Plus, Warehouse, Storefront, Truck, DotsThree, PencilSimple, Trash, Star, MapPin, Globe } from "@/app/_components/icons";
 
-export default function WarehousesPage() {
+const ICON = { warehouse: Warehouse, store: Storefront, vehicle: Truck };
+const EMPTY = { name: "", code: "", type: "warehouse", address: "", note: "", syncToSite: true, isDefault: false, active: true };
+
+function WarehouseForm(props) {
+  return props.open ? <WarehouseFormBody {...props} /> : null;
+}
+
+function WarehouseFormBody({ open, onClose, wh, onSaved }) {
   const toast = useToast();
-  const [list, setList] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", address: "", note: "" });
-  const [loading, setLoading] = useState(false);
-
-  async function load() {
+  const [f, setF] = useState(() => (wh ? { ...EMPTY, ...Object.fromEntries(Object.entries(wh).filter(([k]) => k in EMPTY).map(([k, v]) => [k, v ?? ""])) } : EMPTY));
+  const [busy, setBusy] = useState(false);
+  const set = (p) => setF((x) => ({ ...x, ...p }));
+  const save = async () => {
+    setBusy(true);
     try {
-      setList(await apiGet("/api/warehouses"));
-    } catch (e) {
-      toast(e.message, "error");
-    }
-  }
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function save(e) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await apiPost("/api/warehouses", form);
-      toast("Depozit creat");
-      setOpen(false);
-      setForm({ name: "", address: "", note: "" });
-      load();
+      wh ? await apiPatch(`/api/warehouses/${wh._id}`, f) : await apiPost("/api/warehouses", f);
+      toast(wh ? "Depozitul a fost actualizat" : "Depozitul a fost creat");
+      invalidate("/api/warehouses", "/api/stock", "/api/settings");
+      onSaved();
+      onClose();
     } catch (e) {
       toast(e.message, "error");
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  }
+  };
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={wh ? "Editare depozit" : "Depozit nou"}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Renunță</Button>
+          <Button variant="primary" loading={busy} disabled={!f.name.trim()} onClick={save}>{wh ? "Salvează" : "Creează"}</Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
+          <Field label="Denumire" required><Input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="Magazin Lunca Bîcului" /></Field>
+          <Field label="Cod" hint="pentru 1C"><Input value={f.code} onChange={(e) => set({ code: e.target.value })} placeholder="MAG-1" /></Field>
+        </div>
+        <Field label="Tip">
+          <Select value={f.type} onChange={(e) => set({ type: e.target.value })}>
+            {WAREHOUSE_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+          </Select>
+        </Field>
+        <Field label="Adresă"><Input value={f.address} onChange={(e) => set({ address: e.target.value })} /></Field>
+        <Field label="Notă"><Textarea rows={2} value={f.note} onChange={(e) => set({ note: e.target.value })} /></Field>
+        <Switch checked={f.syncToSite} onChange={(v) => set({ syncToSite: v })} label="Stocul apare pe site" description="Cantitatea din acest depozit se adună la stocul publicat pe luxstore.md." />
+        <Switch checked={f.isDefault} onChange={(v) => set({ isDefault: v })} label="Depozit implicit" description="Propus automat în comenzi și recepții." />
+        {wh && <Switch checked={f.active} onChange={(v) => set({ active: v })} label="Activ" />}
+      </div>
+    </Modal>
+  );
+}
 
-  async function remove(id) {
-    if (!confirm("Stergeti acest depozit?")) return;
+export default function WarehousesPage() {
+  const user = useUser();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const isAdmin = user.role === "admin";
+  const { data, reload } = useApi("/api/warehouses?stats=1&all=1");
+  const [form, setForm] = useState({ open: false, wh: null });
+
+  const remove = async (w) => {
+    if (!(await confirm({ title: `Ștergeți depozitul „${w.name}”?`, message: "Depozitul trebuie să fie gol. Dacă are istoric, va fi dezactivat.", tone: "danger", confirmLabel: "Șterge" }))) return;
     try {
-      await apiDelete(`/api/warehouses/${id}`);
-      toast("Depozit sters");
-      load();
+      const r = await apiDelete(`/api/warehouses/${w._id}`);
+      toast(r.deactivated ? "Depozitul are istoric — a fost dezactivat" : "Depozitul a fost șters");
+      invalidate("/api/warehouses");
+      reload();
     } catch (e) {
       toast(e.message, "error");
     }
-  }
+  };
+  const makeDefault = async (w) => {
+    try {
+      await apiPatch(`/api/warehouses/${w._id}`, { isDefault: true });
+      invalidate("/api/warehouses", "/api/settings");
+      reload();
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  };
 
   return (
-    <div>
+    <div className="animate-in">
       <PageHeader
         title="Depozite"
-        subtitle="Locatiile fizice unde se pastreaza produsele."
-        action={
-          <Button onClick={() => setOpen(true)}>
-            <Icon name="plus" className="h-4 w-4" strokeWidth={2} />
-            Depozit nou
-          </Button>
-        }
+        description="Locurile unde se ține marfa: depozitul central, magazinul, mașina de livrare."
+        actions={isAdmin && <Button variant="primary" icon={Plus} onClick={() => setForm({ open: true, wh: null })}>Depozit nou</Button>}
       />
-
-      {list.length === 0 ? (
-        <Card>
-          <Empty>Nu exista depozite. Creati primul depozit.</Empty>
-        </Card>
+      {!data ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-48" />)}
+        </div>
+      ) : data.length === 0 ? (
+        <Card><EmptyState icon={Warehouse} title="Niciun depozit" /></Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {list.map((w) => (
-            <Card key={w._id} className="p-5">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                    <Icon name="warehouse" className="h-5 w-5" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {data.map((w) => {
+            const IconC = ICON[w.type] || Warehouse;
+            return (
+              <Card key={w._id} className={cx("flex flex-col", w.active === false && "opacity-60")}>
+                <div className="flex items-start gap-3 p-5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                    <IconC size={20} />
                   </span>
-                  <div>
-                    <h3 className="font-semibold text-slate-800">{w.name}</h3>
-                    <div className="text-xs text-slate-400">Depozit activ</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <h3 className="truncate text-[15px] font-semibold text-fg">{w.name}</h3>
+                      {w.isDefault && <Badge tone="accent">Implicit</Badge>}
+                      {w.active === false && <Badge tone="bad">Inactiv</Badge>}
+                    </div>
+                    <div className="mt-0.5 text-[12.5px] text-fg-3">
+                      {WAREHOUSE_TYPES.find((t) => t.key === w.type)?.label || "Depozit"}
+                      {w.code ? ` · ${w.code}` : ""}
+                    </div>
+                    {w.address && <div className="mt-1 flex items-center gap-1 text-[12.5px] text-fg-3"><MapPin size={13} />{w.address}</div>}
                   </div>
-                </div>
-                <button
-                  onClick={() => remove(w._id)}
-                  className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500"
-                >
-                  <Icon name="trash" className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-sm text-slate-500">
-                <div className="flex items-start gap-2">
-                  <Icon
-                    name="warehouse"
-                    className="mt-0.5 h-4 w-4 shrink-0 text-slate-300"
-                  />
-                  <span>{w.address || "Fara adresa"}</span>
-                </div>
-                {w.note && (
-                  <div className="flex items-start gap-2">
-                    <Icon
-                      name="edit"
-                      className="mt-0.5 h-4 w-4 shrink-0 text-slate-300"
+                  {isAdmin && (
+                    <Menu
+                      trigger={<Button size="sm" variant="ghost" icon={DotsThree} aria-label="Acțiuni" />}
+                      items={[
+                        { label: "Editează", icon: PencilSimple, onClick: () => setForm({ open: true, wh: w }) },
+                        !w.isDefault && { label: "Setează ca implicit", icon: Star, onClick: () => makeDefault(w) },
+                        { divider: true },
+                        { label: "Șterge", icon: Trash, danger: true, onClick: () => remove(w) },
+                      ]}
                     />
-                    <span>{w.note}</span>
-                  </div>
-                )}
-              </div>
-            </Card>
-          ))}
+                  )}
+                </div>
+                <div className="mt-auto grid grid-cols-3 divide-x divide-line border-t border-line">
+                  {[["Poziții", num(w.stats.positions)], ["Unități", num(w.stats.units)], ["Valoare", moneyShort(w.stats.value)]].map(([k, v]) => (
+                    <div key={k} className="px-4 py-3">
+                      <div className="text-[11.5px] text-fg-3">{k}</div>
+                      <div className="tnum mt-0.5 text-[15px] font-semibold text-fg">{v}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between border-t border-line px-5 py-2.5 text-[12.5px]">
+                  <span className="flex items-center gap-1.5 text-fg-3"><Globe size={14} />{w.syncToSite !== false ? "Stoc publicat pe site" : "Nu apare pe site"}</span>
+                  <Link href={`/stoc?warehouse=${w._id}`} className="font-medium text-accent hover:underline">Vezi stocul</Link>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
-
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Depozit nou"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setOpen(false)}>
-              Anuleaza
-            </Button>
-            <Button onClick={save} disabled={loading}>
-              {loading ? "Se salveaza…" : "Salveaza"}
-            </Button>
-          </>
-        }
-      >
-        <form onSubmit={save} className="space-y-4">
-          <Field label="Denumire depozit" required>
-            <Input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="ex: Depozit central"
-              required
-            />
-          </Field>
-          <Field label="Adresa">
-            <Input
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              placeholder="ex: str. Industriala 12"
-            />
-          </Field>
-          <Field label="Nota">
-            <Textarea
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-            />
-          </Field>
-        </form>
-      </Modal>
+      {data && <p className="mt-4 text-[12.5px] text-fg-3">Valoare totală (preț de vânzare): <span className="tnum font-medium text-fg">{money(data.reduce((t, w) => t + w.stats.value, 0))}</span> · la cost: <span className="tnum font-medium text-fg">{money(data.reduce((t, w) => t + w.stats.cost, 0))}</span></p>}
+      <WarehouseForm open={form.open} wh={form.wh} onClose={() => setForm({ open: false, wh: null })} onSaved={reload} />
     </div>
   );
 }

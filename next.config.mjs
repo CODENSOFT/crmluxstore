@@ -6,6 +6,14 @@ const nextConfig = {
   turbopack: {
     root: path.dirname(new URL(import.meta.url).pathname),
   },
+  experimental: {
+    optimizePackageImports: ["@phosphor-icons/react"],
+  },
+  poweredByHeader: false,
+  // Adrese vechi -> noi (linkuri salvate de echipa)
+  async redirects() {
+    return [{ source: "/integrare", destination: "/integrari", permanent: true }];
+  },
 };
 
 export default nextConfig;

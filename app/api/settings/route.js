@@ -1,37 +1,46 @@
-import connectDB from "@/lib/mongodb";
-import Settings from "@/models/Settings";
-import { ok, requireUser, requireAdmin } from "@/lib/api";
+import { route, readJson, badRequest } from "@/lib/api";
+import { getSettingsDoc, invalidateSettings } from "@/lib/settings";
+import { logAudit } from "@/lib/audit";
 
-export async function GET() {
-  const { response } = await requireUser();
-  if (response) return response;
-  await connectDB();
-  let settings = await Settings.findOne();
-  if (!settings) settings = await Settings.create({});
-  // Expunem si cheia API si endpoint-urile pentru pagina de integrare
-  return ok({
-    ...settings.toObject(),
-    apiKeyConfigured: !!process.env.MAKE_API_KEY,
-  });
+const COMPANY = ["companyName", "legalName", "idno", "vatCode", "iban", "bank", "bankCode", "address", "phone", "email", "website"];
+const SALES = ["currency", "vatPayer", "vatRate", "pricesIncludeVat", "requireApproval", "lowStockThreshold", "invoiceTerms", "publicUrl"];
+
+function publicView(s) {
+  const o = s.toObject();
+  delete o.woo;
+  return o;
 }
 
-export async function PUT(req) {
-  const { response } = await requireAdmin();
-  if (response) return response;
-  await connectDB();
-  const body = await req.json();
-  let settings = await Settings.findOne();
-  if (!settings) settings = await Settings.create({});
+export const GET = route(async () => publicView(await getSettingsDoc()));
 
-  for (const f of [
-    "companyName",
-    "currency",
-    "makeWebhookUrl",
-    "publicUrl",
-    "lowStockThreshold",
-  ]) {
-    if (body[f] !== undefined) settings[f] = body[f];
-  }
-  await settings.save();
-  return ok(settings);
-}
+export const PUT = route(
+  async ({ req, user }) => {
+    const body = await readJson(req);
+    const s = await getSettingsDoc();
+    for (const f of [...COMPANY, ...SALES]) if (body[f] !== undefined) s[f] = body[f];
+    if (body.vatRate !== undefined) {
+      const v = Number(body.vatRate);
+      if (!(v >= 0 && v <= 100)) throw badRequest("Cota TVA invalidă");
+      s.vatRate = v;
+    }
+    if (body.lowStockThreshold !== undefined) s.lowStockThreshold = Math.max(0, Number(body.lowStockThreshold) || 0);
+    if (body.defaultWarehouse !== undefined) s.defaultWarehouse = body.defaultWarehouse || undefined;
+    if (Array.isArray(body.deliveryMethods)) {
+      const methods = body.deliveryMethods
+        .filter((m) => m && String(m.label || "").trim())
+        .map((m, i) => ({
+          key: String(m.key || "").trim() || `custom_${i + 1}`,
+          label: String(m.label).trim(),
+          cost: Math.max(0, Number(m.cost) || 0),
+          active: m.active !== false,
+        }));
+      if (!methods.length) throw badRequest("Păstrați cel puțin o metodă de livrare");
+      s.deliveryMethods = methods;
+    }
+    await s.save();
+    invalidateSettings();
+    await logAudit({ action: "settings_saved", category: "settings", user, details: Object.keys(body).join(", ") });
+    return publicView(s);
+  },
+  { auth: "admin" }
+);
