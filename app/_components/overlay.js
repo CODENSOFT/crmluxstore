@@ -2,8 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { X, CheckCircle, WarningCircle, Info } from "./icons";
-import { Button, cx, Input } from "./ui";
+import { X, CheckCircle, WarningCircle, Info, ArrowLeft } from "./icons";
+import { Button, cx, Input, Kbd } from "./ui";
 
 /* ---------------- Modal (dialog nativ) ---------------- */
 const SIZES = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl", full: "max-w-6xl" };
@@ -61,9 +61,9 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   );
 }
 
-/* ---------------- Panou lateral ---------------- */
-// Panou lateral (din dreapta): pe telefon ocupa tot ecranul, pe calculator ~90% din latime (max 1400px)
-export function Drawer({ open, onClose, title, description, children, footer, width = "sm:max-w-[min(90vw,1400px)]", headerAction }) {
+/* ---------------- Fereastra pe tot ecranul (formulare, detalii) ---------------- */
+// Ocupa tot ecranul; continutul sta centrat intr-un card lizibil (latime maxima `width`).
+export function Drawer({ open, onClose, title, description, children, footer, width = "max-w-4xl", headerAction }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -78,29 +78,47 @@ export function Drawer({ open, onClose, title, description, children, footer, wi
         e.preventDefault();
         onClose?.();
       }}
-      className="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 open:flex"
+      className="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 open:block"
     >
-      <div className="flex-1" onClick={onClose} aria-hidden />
-      <div className={cx("flex h-full w-full flex-col border-l border-line bg-surface shadow-lg animate-in", width)}>
-        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-7">
-          <div className="min-w-0">
-            <h3 className="truncate text-[16px] font-semibold tracking-tight text-fg">{title}</h3>
-            {description && <p className="mt-0.5 text-[13px] text-fg-3">{description}</p>}
-          </div>
-          <div className="flex items-center gap-1">
-            {headerAction}
+      <div className="flex h-dvh w-full animate-in flex-col bg-bg">
+        <header className="shrink-0 border-b border-line bg-surface/90 backdrop-blur-md">
+          <div className={cx("mx-auto flex w-full items-center gap-3 px-4 py-3 sm:px-8 sm:py-4", width)}>
+            <button
+              type="button"
+              aria-label="Înapoi"
+              onClick={onClose}
+              className="-ml-1.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg"
+            >
+              <ArrowLeft size={19} />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-[17px] font-semibold tracking-tight text-fg sm:text-[18px]">{title}</h3>
+              {description && <p className="mt-0.5 line-clamp-2 text-[13px] text-fg-3">{description}</p>}
+            </div>
+            {headerAction && <div className="flex shrink-0 items-center gap-2">{headerAction}</div>}
+            <span className="hidden items-center gap-1.5 text-[12px] text-fg-4 md:flex">
+              <Kbd>Esc</Kbd> închide
+            </span>
             <button
               type="button"
               aria-label="Închide"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-fg-3 transition-colors hover:bg-surface-2 hover:text-fg"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-surface-2 hover:text-fg"
             >
               <X size={18} />
             </button>
           </div>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className={cx("mx-auto w-full px-3 py-4 sm:px-8 sm:py-8", width)}>
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs sm:p-8">{children}</div>
+          </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">{children}</div>
-        {footer && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3.5 sm:px-7">{footer}</div>}
+        {footer && (
+          <footer className="shrink-0 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
+            <div className={cx("mx-auto flex w-full flex-wrap items-center justify-end gap-2 px-4 py-3 sm:px-8", width)}>{footer}</div>
+          </footer>
+        )}
       </div>
     </dialog>
   );
