@@ -46,7 +46,6 @@ function TransferFormBody({ open, onClose }) {
     <Drawer
       open={open}
       onClose={onClose}
-      width="max-w-2xl"
       title="Transfer între depozite"
       description="Mută marfa dintr-un depozit în altul (ex: din depozit în magazin)."
       footer={

@@ -62,7 +62,8 @@ export function Modal({ open, onClose, title, description, children, footer, siz
 }
 
 /* ---------------- Panou lateral ---------------- */
-export function Drawer({ open, onClose, title, description, children, footer, width = "max-w-xl", headerAction }) {
+// Panou lateral (din dreapta): pe telefon ocupa tot ecranul, pe calculator ~90% din latime (max 1400px)
+export function Drawer({ open, onClose, title, description, children, footer, width = "sm:max-w-[min(90vw,1400px)]", headerAction }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -81,7 +82,7 @@ export function Drawer({ open, onClose, title, description, children, footer, wi
     >
       <div className="flex-1" onClick={onClose} aria-hidden />
       <div className={cx("flex h-full w-full flex-col border-l border-line bg-surface shadow-lg animate-in", width)}>
-        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-7">
           <div className="min-w-0">
             <h3 className="truncate text-[16px] font-semibold tracking-tight text-fg">{title}</h3>
             {description && <p className="mt-0.5 text-[13px] text-fg-3">{description}</p>}
@@ -98,8 +99,8 @@ export function Drawer({ open, onClose, title, description, children, footer, wi
             </button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
-        {footer && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3.5">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">{children}</div>
+        {footer && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3.5 sm:px-7">{footer}</div>}
       </div>
     </dialog>
   );

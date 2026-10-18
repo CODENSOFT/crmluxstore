@@ -46,7 +46,6 @@ function WriteoffFormBody({ open, onClose }) {
     <Drawer
       open={open}
       onClose={onClose}
-      width="max-w-2xl"
       title="Casare stoc"
       description="Scoaterea din stoc a produselor expirate, deteriorate sau folosite intern."
       footer={

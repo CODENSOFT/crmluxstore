@@ -80,7 +80,7 @@ function SupplierFormBody({ open, onClose, supplier, onSaved }) {
 function SupplierDetail({ id, onClose, onEdit }) {
   const { data: s } = useApi(id ? `/api/suppliers/${id}` : null, { keepPrevious: false });
   return (
-    <Drawer open={!!id} onClose={onClose} title={s?.name || "Furnizor"} description={s?.country} width="max-w-2xl" headerAction={s && <Button size="sm" icon={PencilSimple} onClick={() => onEdit(s)}>Editează</Button>}>
+    <Drawer open={!!id} onClose={onClose} title={s?.name || "Furnizor"} description={s?.country} headerAction={s && <Button size="sm" icon={PencilSimple} onClick={() => onEdit(s)}>Editează</Button>}>
       {!s ? (
         <Skeleton className="h-60" />
       ) : (

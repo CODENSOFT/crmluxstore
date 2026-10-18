@@ -584,7 +584,7 @@ X-Lux-Signature: sha256=<HMAC-SHA256(secret, corpul cererii)>
 { "id": "…", "event": "order.created", "createdAt": "2026-10-17T09:12:00Z", "data": { …comanda… } }`}</pre>
       </Card>
       <HookForm open={form.open} hook={form.hook} onClose={() => setForm({ open: false, hook: null })} onSaved={reload} />
-      <Drawer open={!!log} onClose={() => setLog(null)} title={`Livrări — ${log?.name || ""}`} description="Ultimele 50 (se păstrează 14 zile)" width="max-w-2xl">
+      <Drawer open={!!log} onClose={() => setLog(null)} title={`Livrări — ${log?.name || ""}`} description="Ultimele 50 (se păstrează 14 zile)">
         {!deliveries ? <Skeleton className="h-40" /> : deliveries.length === 0 ? <EmptyState compact title="Nicio livrare încă" /> : (
           <ul className="divide-y divide-line rounded-xl border border-line">
             {deliveries.map((d) => (

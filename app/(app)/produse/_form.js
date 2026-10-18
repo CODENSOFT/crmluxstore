@@ -152,7 +152,6 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
     <Drawer
       open={open}
       onClose={onClose}
-      width="max-w-2xl"
       title={product ? "Editare produs" : "Produs nou"}
       description={product ? product.name : "Prețurile se introduc cu TVA inclus, cum apar pe site și în magazin."}
       footer={

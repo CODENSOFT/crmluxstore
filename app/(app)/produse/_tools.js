@@ -90,7 +90,6 @@ export function ImportDrawer({ open, onClose }) {
         reset();
         onClose();
       }}
-      width="max-w-3xl"
       title="Import produse din Excel / CSV"
       description="Produsele existente se actualizează (după SKU, cod de bare sau denumire); cele noi se creează."
       footer={
