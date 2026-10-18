@@ -5,10 +5,10 @@ import { apiPatch, apiPost } from "@/lib/client";
 import { invalidate, useApi } from "@/lib/useApi";
 import { UNITS, UNIT_NAMES } from "@/lib/constants";
 import { money, pct } from "@/lib/format";
-import { Button, Field, Input, NumberInput, Select, Textarea, Switch, IconButton, Badge } from "@/app/_components/ui";
+import { Button, Field, FormSection, Input, NumberInput, Select, Textarea, Switch, IconButton, Badge } from "@/app/_components/ui";
 import { Drawer, useToast } from "@/app/_components/overlay";
 import { ProductPicker } from "@/app/_components/pickers";
-import { ImageIcon, Trash, UploadSimple, LinkIcon } from "@/app/_components/icons";
+import { ImageIcon, Trash, UploadSimple, LinkIcon, Tag, Coins, Warehouse, Cube, PlugsConnected } from "@/app/_components/icons";
 
 // Redimensioneaza imaginea in browser (max 900px, JPEG/WebP) — fisier mic, incarcare rapida
 function resizeImage(file, max = 900) {
@@ -55,18 +55,6 @@ const EMPTY = {
   components: [],
   externalId: "",
 };
-
-function Section({ title, aside, children }) {
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-[12.5px] font-semibold text-fg-2">{title}</h4>
-        {aside}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 function initialForm(product) {
   if (!product) return EMPTY;
@@ -165,10 +153,10 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
         </>
       }
     >
-      <div className="space-y-7">
-        <Section title="Fotografie">
-          <div className="flex items-start gap-4">
-            <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-surface-2">
+      <div className="space-y-8">
+        <FormSection icon={ImageIcon} title="Fotografie" description="Apare în listă, în comenzi și pe documente. Încărcați o imagine sau lipiți linkul de pe luxstore.md.">
+          <div className="flex flex-col items-start gap-4 sm:flex-row">
+            <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-line-strong bg-surface-2">
               {photoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={photoSrc} alt={f.name || "Produs"} className="h-full w-full object-contain" />
@@ -176,7 +164,7 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
                 <ImageIcon size={30} className="text-fg-4" />
               )}
             </div>
-            <div className="min-w-0 flex-1 space-y-2">
+            <div className="w-full min-w-0 max-w-2xl flex-1 space-y-2">
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" icon={UploadSimple} onClick={() => fileRef.current?.click()}>
@@ -189,7 +177,9 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
                 )}
               </div>
               <div className="flex gap-2">
-                <Input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="sau lipiți linkul imaginii (ex: de pe luxstore.md)" prefix={<LinkIcon size={14} />} />
+                <div className="min-w-0 flex-1">
+                  <Input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="sau lipiți linkul imaginii (ex: de pe luxstore.md)" prefix={<LinkIcon size={14} />} />
+                </div>
                 <Button size="md" disabled={!/^https?:\/\//.test(photoUrl)} onClick={() => { set({ photo: photoUrl.trim() }); setPhotoUrl(""); }}>
                   Folosește
                 </Button>
@@ -197,9 +187,9 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
               <p className="text-[12px] text-fg-3">Imaginea se micșorează automat pentru încărcare rapidă.</p>
             </div>
           </div>
-        </Section>
+        </FormSection>
 
-        <Section title="Informații de bază">
+        <FormSection icon={Tag} title="Informații de bază" description="Denumirea și codurile după care produsul se caută la vânzare, se scanează și se leagă de site / 1C.">
           <Field label="Denumire" required>
             <Input autoFocus={!product} value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="ex: Koch-Chemie Green Star 11 kg" />
           </Field>
@@ -239,9 +229,9 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
           <Field label="Descriere">
             <Textarea rows={3} value={f.description} onChange={(e) => set({ description: e.target.value })} placeholder="Utilizare, diluție recomandată, compatibilitate cu echipamentele…" />
           </Field>
-        </Section>
+        </FormSection>
 
-        <Section title="Prețuri">
+        <FormSection icon={Coins} title="Prețuri și stoc minim" description="Prețurile de vânzare includ TVA. Marja se calculează automat față de prețul de achiziție.">
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Preț cu amănuntul" required hint={margin(price) != null ? `Marjă ${pct(margin(price))}` : "cu TVA"}>
               <NumberInput value={f.price} onChange={(v) => set({ price: v })} placeholder="0,00" suffix="MDL" />
@@ -260,15 +250,24 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
             </Field>
           </div>
           {price > 0 && cost > 0 && (
-            <p className="text-[12.5px] text-fg-3">
-              Profit pe unitate (amănunt, fără TVA): <span className="tnum font-medium text-fg">{money(net(price) - cost)}</span>
-            </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-ok-soft px-2.5 py-1.5 text-[12.5px] text-ok">
+                Profit pe unitate (amănunt, fără TVA): <span className="tnum font-semibold">{money(net(price) - cost)}</span>
+              </span>
+              {margin(price) != null && (
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-fg-2">
+                  Marjă amănunt <span className="tnum font-semibold text-fg">{pct(margin(price))}</span>
+                </span>
+              )}
+            </div>
           )}
-        </Section>
+        </FormSection>
 
         {!product && (
-          <Section
+          <FormSection
+            icon={Warehouse}
             title="Stoc inițial"
+            description="Cantitatea existentă acum în depozit. Ulterior stocul se modifică doar prin documente, cu istoric."
             aside={
               warehouses?.length > 1 && (
                 <button type="button" className="text-[12.5px] font-medium text-accent hover:underline" onClick={() => setInitial([...initial, { warehouse: "", quantity: "" }])}>
@@ -291,11 +290,10 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
                 <IconButton icon={Trash} label="Elimină" size="md" variant="danger-ghost" onClick={() => setInitial(initial.filter((_, j) => j !== i))} />
               </div>
             ))}
-            <p className="text-[12px] text-fg-3">Stocul ulterior se modifică doar prin recepții, vânzări, transferuri, casări sau inventariere — cu istoric complet.</p>
-          </Section>
+          </FormSection>
         )}
 
-        <Section title="Set / kit">
+        <FormSection icon={Cube} title="Set / kit" description="Pentru seturi formate din mai multe produse (ex: kit de îngrijire interior).">
           <Switch
             checked={f.isComposite}
             onChange={(v) => set({ isComposite: v })}
@@ -326,9 +324,9 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
               />
             </div>
           )}
-        </Section>
+        </FormSection>
 
-        <Section title="Stare și integrări">
+        <FormSection icon={PlugsConnected} title="Stare și integrări" description="Activare / dezactivare și legătura cu 1C și site-ul.">
           <Switch checked={f.active} onChange={(v) => set({ active: v })} label="Produs activ" description="Produsele inactive nu apar la comenzi noi, dar rămân în istoric." />
           <Field label="Cod în 1C (externalId)" hint="Se completează automat la sincronizarea cu 1C">
             <Input value={f.externalId} onChange={(e) => set({ externalId: e.target.value })} placeholder="—" />
@@ -338,7 +336,7 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
               Legat de produsul de pe site: <Badge tone="accent">#{product.wooId}</Badge>
             </p>
           )}
-        </Section>
+        </FormSection>
       </div>
       <datalist id="brands">
         {[...new Set((all || []).map((p) => p.brand).filter(Boolean))].map((b) => (

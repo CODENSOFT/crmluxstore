@@ -61,9 +61,10 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   );
 }
 
-/* ---------------- Fereastra pe tot ecranul (formulare, detalii) ---------------- */
-// Ocupa tot ecranul; continutul sta centrat intr-un card lizibil (latime maxima `width`).
-export function Drawer({ open, onClose, title, description, children, footer, width = "max-w-4xl", headerAction }) {
+/* ---------------- Panou din dreapta (formulare, detalii) ---------------- */
+// Laptop / calculator: 80% din latimea ecranului, pagina ramane vizibila in stanga.
+// Telefon / tableta: tot ecranul.
+export function Drawer({ open, onClose, title, description, children, footer, width = "lg:w-[80vw]", headerAction }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -78,45 +79,40 @@ export function Drawer({ open, onClose, title, description, children, footer, wi
         e.preventDefault();
         onClose?.();
       }}
-      className="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 open:block"
+      className="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 open:flex"
     >
-      <div className="flex h-dvh w-full animate-in flex-col bg-bg">
-        <header className="shrink-0 border-b border-line bg-surface/90 backdrop-blur-md">
-          <div className={cx("mx-auto flex w-full items-center gap-3 px-4 py-3 sm:px-8 sm:py-4", width)}>
-            <button
-              type="button"
-              aria-label="Înapoi"
-              onClick={onClose}
-              className="-ml-1.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg"
-            >
-              <ArrowLeft size={19} />
-            </button>
-            <div className="min-w-0 flex-1">
-              <h3 className="truncate text-[17px] font-semibold tracking-tight text-fg sm:text-[18px]">{title}</h3>
-              {description && <p className="mt-0.5 line-clamp-2 text-[13px] text-fg-3">{description}</p>}
-            </div>
-            {headerAction && <div className="flex shrink-0 items-center gap-2">{headerAction}</div>}
-            <span className="hidden items-center gap-1.5 text-[12px] text-fg-4 md:flex">
-              <Kbd>Esc</Kbd> închide
-            </span>
-            <button
-              type="button"
-              aria-label="Închide"
-              onClick={onClose}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-surface-2 hover:text-fg"
-            >
-              <X size={18} />
-            </button>
+      <div className="hidden flex-1 cursor-pointer lg:block" onClick={onClose} aria-hidden />
+      <div className={cx("flex h-dvh w-full shrink-0 animate-slide flex-col bg-surface shadow-lg lg:rounded-l-2xl lg:border-l lg:border-line", width)}>
+        <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3 sm:px-6 lg:px-10 lg:py-4">
+          <button
+            type="button"
+            aria-label="Înapoi"
+            onClick={onClose}
+            className="-ml-1.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg lg:hidden"
+          >
+            <ArrowLeft size={19} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-[17px] font-semibold tracking-tight text-fg lg:text-[19px]">{title}</h3>
+            {description && <p className="mt-0.5 line-clamp-2 text-[13px] text-fg-3">{description}</p>}
           </div>
+          {headerAction && <div className="flex shrink-0 items-center gap-2">{headerAction}</div>}
+          <span className="hidden items-center gap-1.5 text-[12px] text-fg-4 lg:flex">
+            <Kbd>Esc</Kbd>
+          </span>
+          <button
+            type="button"
+            aria-label="Închide"
+            onClick={onClose}
+            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-surface-2 hover:text-fg lg:inline-flex"
+          >
+            <X size={18} />
+          </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className={cx("mx-auto w-full px-3 py-4 sm:px-8 sm:py-8", width)}>
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs sm:p-8">{children}</div>
-          </div>
-        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 lg:px-10 lg:py-8">{children}</div>
         {footer && (
-          <footer className="shrink-0 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
-            <div className={cx("mx-auto flex w-full flex-wrap items-center justify-end gap-2 px-4 py-3 sm:px-8", width)}>{footer}</div>
+          <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line bg-surface-2/40 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-10">
+            {footer}
           </footer>
         )}
       </div>

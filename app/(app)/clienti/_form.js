@@ -5,9 +5,9 @@ import { apiPatch, apiPost } from "@/lib/client";
 import { invalidate, useApi } from "@/lib/useApi";
 import { useUser } from "@/app/_components/user";
 import { CUSTOMER_SEGMENTS, CUSTOMER_SOURCES } from "@/lib/constants";
-import { Button, Field, Input, NumberInput, Select, Textarea, Segmented, Alert } from "@/app/_components/ui";
+import { Button, Field, FormSection, Input, NumberInput, Select, Textarea, Segmented, Alert } from "@/app/_components/ui";
 import { Drawer, useToast } from "@/app/_components/overlay";
-import { Buildings, User, Warning } from "@/app/_components/icons";
+import { Buildings, User, Warning, Bank, Truck, HandCoins, Note } from "@/app/_components/icons";
 
 const EMPTY = {
   type: "individual",
@@ -32,15 +32,6 @@ const EMPTY = {
   note: "",
   manager: "",
 };
-
-function Section({ title, children }) {
-  return (
-    <section className="space-y-3">
-      <h4 className="text-[12.5px] font-semibold text-fg-2">{title}</h4>
-      {children}
-    </section>
-  );
-}
 
 function initial(customer) {
   if (!customer) return EMPTY;
@@ -104,22 +95,21 @@ function CustomerFormBody({ open, onClose, customer, onSaved }) {
         </>
       }
     >
-      <div className="space-y-6">
-        <Segmented
-          value={f.type}
-          onChange={(v) =>
-            set({
-              type: v,
-              ...(!customer ? { segment: v === "company" ? "carwash" : "retail", priceType: v === "company" ? "wholesale" : "retail" } : {}),
-            })
-          }
-          options={[
-            { value: "individual", label: "Persoană fizică", icon: User },
-            { value: "company", label: "Persoană juridică", icon: Buildings },
-          ]}
-        />
-
-        <Section title="Date principale">
+      <div className="space-y-8">
+        <FormSection icon={company ? Buildings : User} title="Date principale" description="Tipul clientului stabilește prețurile implicite: companiile primesc prețuri angro.">
+          <Segmented
+            value={f.type}
+            onChange={(v) =>
+              set({
+                type: v,
+                ...(!customer ? { segment: v === "company" ? "carwash" : "retail", priceType: v === "company" ? "wholesale" : "retail" } : {}),
+              })
+            }
+            options={[
+              { value: "individual", label: "Persoană fizică", icon: User },
+              { value: "company", label: "Persoană juridică", icon: Buildings },
+            ]}
+          />
           <Field label={company ? "Denumirea companiei" : "Nume și prenume"} required>
             <Input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder={company ? "SRL AquaWash Self-Service" : "Ion Popescu"} />
           </Field>
@@ -128,21 +118,21 @@ function CustomerFormBody({ open, onClose, customer, onSaved }) {
               <Input value={f.contactPerson} onChange={(e) => set({ contactPerson: e.target.value })} placeholder="Nume, funcție" />
             </Field>
           )}
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Field label="Telefon">
               <Input value={f.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="+373 6x xxx xxx" inputMode="tel" />
             </Field>
             <Field label="Telefon suplimentar">
               <Input value={f.phone2} onChange={(e) => set({ phone2: e.target.value })} inputMode="tel" />
             </Field>
-            <Field label="Email" className="sm:col-span-2">
+            <Field label="Email" className="sm:col-span-2 xl:col-span-1">
               <Input type="email" value={f.email} onChange={(e) => set({ email: e.target.value })} placeholder="nume@exemplu.md" />
             </Field>
           </div>
-        </Section>
+        </FormSection>
 
         {company && (
-          <Section title="Date fiscale și bancare">
+          <FormSection icon={Bank} title="Date fiscale și bancare" description="Necesare pentru facturi fiscale și plăți prin transfer.">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="IDNO (cod fiscal)" hint="13 cifre">
                 <Input value={f.idno} onChange={(e) => set({ idno: e.target.value.replace(/\s/g, "") })} inputMode="numeric" maxLength={13} />
@@ -160,10 +150,10 @@ function CustomerFormBody({ open, onClose, customer, onSaved }) {
                 <Input value={f.legalAddress} onChange={(e) => set({ legalAddress: e.target.value })} />
               </Field>
             </div>
-          </Section>
+          </FormSection>
         )}
 
-        <Section title="Livrare">
+        <FormSection icon={Truck} title="Livrare" description="Adresa se completează automat în comenzile noi ale clientului.">
           <div className="grid gap-3 sm:grid-cols-[160px_minmax(0,1fr)]">
             <Field label="Oraș / localitate">
               <Input value={f.city} onChange={(e) => set({ city: e.target.value })} placeholder="Chișinău" />
@@ -172,10 +162,10 @@ function CustomerFormBody({ open, onClose, customer, onSaved }) {
               <Input value={f.address} onChange={(e) => set({ address: e.target.value })} placeholder="str., nr., ap. / spălătoria" />
             </Field>
           </div>
-        </Section>
+        </FormSection>
 
-        <Section title="Condiții comerciale">
-          <div className="grid gap-3 sm:grid-cols-2">
+        <FormSection icon={HandCoins} title="Condiții comerciale" description="Segmentul, tipul de preț, reducerea și termenul de plată se aplică automat la fiecare comandă.">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Field label="Segment">
               <Select value={f.segment} onChange={(e) => set({ segment: e.target.value })}>
                 {CUSTOMER_SEGMENTS.map((s) => (
@@ -225,11 +215,11 @@ function CustomerFormBody({ open, onClose, customer, onSaved }) {
           <Field label="Etichete" hint="Separate prin virgulă, ex: VIP, 3 posturi, Koch-Chemie">
             <Input value={f.tags} onChange={(e) => set({ tags: e.target.value })} />
           </Field>
-        </Section>
+        </FormSection>
 
-        <Field label="Notițe">
-          <Textarea rows={3} value={f.note} onChange={(e) => set({ note: e.target.value })} placeholder="Preferințe, echipamente instalate, programul de lucru…" />
-        </Field>
+        <FormSection icon={Note} title="Notițe" description="Vizibile doar în CRM, pentru echipă.">
+          <Textarea rows={4} value={f.note} onChange={(e) => set({ note: e.target.value })} placeholder="Preferințe, echipamente instalate, programul de lucru…" />
+        </FormSection>
 
         {dup && (
           <Alert tone="warn" icon={Warning} title={`Există deja clientul „${dup.name}” cu aceleași date de contact`}>

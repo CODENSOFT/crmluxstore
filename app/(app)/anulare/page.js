@@ -6,10 +6,10 @@ import { useApi, qs, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { money, num, formatDateTime, relativeTime } from "@/lib/format";
 import { WRITEOFF_REASONS, writeoffReasonLabel } from "@/lib/constants";
-import { Card, PageHeader, Button, Select, SearchInput, Field, Input, EmptyState, Badge } from "@/app/_components/ui";
+import { Card, PageHeader, Button, Select, SearchInput, Field, FormSection, Input, EmptyState, Badge } from "@/app/_components/ui";
 import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
 import { Drawer, useToast } from "@/app/_components/overlay";
-import { Plus, TrashSimple } from "@/app/_components/icons";
+import { Plus, TrashSimple, Package } from "@/app/_components/icons";
 import { DocLinesEditor, linesPayload, linesValid } from "../_stockdoc";
 
 const TONE = { expired: "warn", damaged: "bad", defect: "bad", internal: "info", sample: "violet", lost: "bad", other: "neutral" };
@@ -59,8 +59,9 @@ function WriteoffFormBody({ open, onClose }) {
         </>
       }
     >
-      <div className="-mx-5 space-y-4">
-        <div className="grid gap-3 px-5 sm:grid-cols-2">
+      <div className="space-y-8">
+        <FormSection icon={TrashSimple} title="Document" description="Din ce depozit și de ce se scot produsele. Pierderea se calculează la prețul de achiziție.">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Depozit">
             <Select value={warehouse} onChange={(e) => setWarehouse(e.target.value)}>
               {(warehouses || []).map((w) => (
@@ -83,7 +84,12 @@ function WriteoffFormBody({ open, onClose }) {
             <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="ex: canistră fisurată la descărcare" />
           </Field>
         </div>
-        <DocLinesEditor lines={lines} setLines={setLines} products={products} warehouse={warehouse} checkStock />
+        </FormSection>
+        <FormSection icon={Package} title="Produse" description="Căutați sau scanați produsele. Stocul disponibil în depozit se verifică automat.">
+          <div className="overflow-hidden rounded-xl border border-line">
+            <DocLinesEditor lines={lines} setLines={setLines} products={products} warehouse={warehouse} checkStock />
+          </div>
+        </FormSection>
       </div>
     </Drawer>
   );

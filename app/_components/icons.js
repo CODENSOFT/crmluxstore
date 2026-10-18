@@ -124,4 +124,5 @@ export {
   Repeat,
   Medal,
   ShoppingBag,
+  Bank,
 } from "@phosphor-icons/react";

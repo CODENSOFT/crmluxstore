@@ -5,10 +5,10 @@ import { apiPost } from "@/lib/client";
 import { useApi, qs, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { num, formatDateTime, relativeTime } from "@/lib/format";
-import { Card, PageHeader, Button, Select, SearchInput, Field, Textarea, EmptyState, Alert } from "@/app/_components/ui";
+import { Card, PageHeader, Button, Select, SearchInput, Field, FormSection, Textarea, EmptyState, Alert } from "@/app/_components/ui";
 import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
 import { Drawer, useToast } from "@/app/_components/overlay";
-import { Plus, ArrowsLeftRight, ArrowRight, Warning } from "@/app/_components/icons";
+import { Plus, ArrowsLeftRight, ArrowRight, Warning, Package, Note } from "@/app/_components/icons";
 import { DocLinesEditor, linesPayload, linesValid } from "../_stockdoc";
 
 function TransferForm(props) {
@@ -64,8 +64,9 @@ function TransferFormBody({ open, onClose }) {
           Adăugați încă un depozit (ex: „Magazin Lunca Bîcului”) din pagina Depozite.
         </Alert>
       ) : (
-        <div className="-mx-5 space-y-4">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3 px-5">
+        <div className="space-y-8">
+          <FormSection icon={ArrowsLeftRight} title="Traseu" description="Stocul scade în depozitul sursă și crește în cel de destinație, într-o singură operațiune.">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3">
             <Field label="Din depozitul">
               <Select value={from} onChange={(e) => setFrom(e.target.value)}>
                 {(warehouses || []).map((w) => (
@@ -86,12 +87,15 @@ function TransferFormBody({ open, onClose }) {
               </Select>
             </Field>
           </div>
-          <DocLinesEditor lines={lines} setLines={setLines} products={products} warehouse={from} checkStock />
-          <div className="px-5">
-            <Field label="Notă">
-              <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="ex: reaprovizionare raft magazin" />
-            </Field>
-          </div>
+          </FormSection>
+          <FormSection icon={Package} title="Produse" description="Căutați sau scanați produsele. Se verifică stocul din depozitul sursă.">
+            <div className="overflow-hidden rounded-xl border border-line">
+              <DocLinesEditor lines={lines} setLines={setLines} products={products} warehouse={from} checkStock />
+            </div>
+          </FormSection>
+          <FormSection icon={Note} title="Notă" description="Opțional — motivul transferului.">
+            <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="ex: reaprovizionare raft magazin" />
+          </FormSection>
         </div>
       )}
     </Drawer>

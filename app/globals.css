@@ -176,6 +176,7 @@
   --shadow-lg: var(--sh-lg);
   --animate-in: fade-up 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
   --animate-pop: pop 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-slide: slide-in 0.26s cubic-bezier(0.22, 0.9, 0.24, 1);
 }
 
 *,
@@ -266,6 +267,17 @@ textarea:focus-visible {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0.4;
+    transform: translateX(48px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 

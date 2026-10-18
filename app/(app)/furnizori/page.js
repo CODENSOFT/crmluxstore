@@ -7,10 +7,10 @@ import { useApi, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { useUser } from "@/app/_components/user";
 import { money, formatDate, relativeTime, num } from "@/lib/format";
-import { Card, PageHeader, Button, Field, Input, NumberInput, Textarea, SearchInput, EmptyState, Badge, Avatar, DetailList, Skeleton, Switch } from "@/app/_components/ui";
+import { Card, PageHeader, Button, Field, FormSection, Input, NumberInput, Textarea, SearchInput, EmptyState, Badge, Avatar, DetailList, Skeleton, Switch, Stat } from "@/app/_components/ui";
 import { DataTable, Toolbar } from "@/app/_components/table";
 import { Drawer, useConfirm, useToast } from "@/app/_components/overlay";
-import { Plus, Truck, PencilSimple, Trash, Phone, EnvelopeSimple, Globe } from "@/app/_components/icons";
+import { Plus, Truck, PencilSimple, Trash, Phone, EnvelopeSimple, Globe, Bank, HandCoins, Note, TrayArrowDown } from "@/app/_components/icons";
 
 const EMPTY = { name: "", contactPerson: "", phone: "", email: "", website: "", address: "", country: "", idno: "", iban: "", paymentTermDays: "", brands: "", note: "", active: true };
 
@@ -54,24 +54,36 @@ function SupplierFormBody({ open, onClose, supplier, onSaved }) {
         </>
       }
     >
-      <div className="space-y-4">
-        <Field label="Denumire" required>
-          <Input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="ex: Koch-Chemie Distribuție" />
-        </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Persoană de contact"><Input value={f.contactPerson} onChange={(e) => set({ contactPerson: e.target.value })} /></Field>
-          <Field label="Telefon"><Input value={f.phone} onChange={(e) => set({ phone: e.target.value })} inputMode="tel" /></Field>
-          <Field label="Email"><Input type="email" value={f.email} onChange={(e) => set({ email: e.target.value })} /></Field>
-          <Field label="Website"><Input value={f.website} onChange={(e) => set({ website: e.target.value })} placeholder="https://" /></Field>
-          <Field label="Țara"><Input value={f.country} onChange={(e) => set({ country: e.target.value })} placeholder="Moldova, România, Germania…" /></Field>
-          <Field label="Termen de plată"><NumberInput value={f.paymentTermDays} onChange={(v) => set({ paymentTermDays: v })} suffix="zile" placeholder="0" /></Field>
-          <Field label="IDNO / cod fiscal"><Input value={f.idno} onChange={(e) => set({ idno: e.target.value })} /></Field>
-          <Field label="IBAN"><Input value={f.iban} onChange={(e) => set({ iban: e.target.value.toUpperCase() })} /></Field>
-        </div>
-        <Field label="Adresă"><Input value={f.address} onChange={(e) => set({ address: e.target.value })} /></Field>
-        <Field label="Mărci livrate" hint="Separate prin virgulă"><Input value={f.brands} onChange={(e) => set({ brands: e.target.value })} placeholder="Koch-Chemie, FOX LINE" /></Field>
-        <Field label="Notițe"><Textarea rows={3} value={f.note} onChange={(e) => set({ note: e.target.value })} placeholder="Condiții, termene de livrare, comandă minimă…" /></Field>
-        {supplier && <Switch checked={f.active} onChange={(v) => set({ active: v })} label="Furnizor activ" />}
+      <div className="space-y-8">
+        <FormSection icon={Truck} title="Furnizor" description="Denumirea și persoana cu care comunicați pentru comenzi.">
+          <Field label="Denumire" required>
+            <Input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="ex: Koch-Chemie Distribuție" />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <Field label="Persoană de contact"><Input value={f.contactPerson} onChange={(e) => set({ contactPerson: e.target.value })} /></Field>
+            <Field label="Telefon"><Input value={f.phone} onChange={(e) => set({ phone: e.target.value })} inputMode="tel" /></Field>
+            <Field label="Email"><Input type="email" value={f.email} onChange={(e) => set({ email: e.target.value })} /></Field>
+            <Field label="Website"><Input value={f.website} onChange={(e) => set({ website: e.target.value })} placeholder="https://" /></Field>
+            <Field label="Țara"><Input value={f.country} onChange={(e) => set({ country: e.target.value })} placeholder="Moldova, România, Germania…" /></Field>
+            <Field label="Adresă"><Input value={f.address} onChange={(e) => set({ address: e.target.value })} /></Field>
+          </div>
+        </FormSection>
+        <FormSection icon={Bank} title="Date fiscale" description="Pentru recepții cu factură și plăți prin transfer.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="IDNO / cod fiscal"><Input value={f.idno} onChange={(e) => set({ idno: e.target.value })} /></Field>
+            <Field label="IBAN"><Input value={f.iban} onChange={(e) => set({ iban: e.target.value.toUpperCase() })} /></Field>
+          </div>
+        </FormSection>
+        <FormSection icon={HandCoins} title="Condiții" description="Termenul de plată și mărcile pe care le livrează.">
+          <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+            <Field label="Termen de plată"><NumberInput value={f.paymentTermDays} onChange={(v) => set({ paymentTermDays: v })} suffix="zile" placeholder="0" /></Field>
+            <Field label="Mărci livrate" hint="Separate prin virgulă"><Input value={f.brands} onChange={(e) => set({ brands: e.target.value })} placeholder="Koch-Chemie, FOX LINE" /></Field>
+          </div>
+        </FormSection>
+        <FormSection icon={Note} title="Notițe" description="Condiții de livrare, comandă minimă, contacte suplimentare.">
+          <Textarea rows={4} value={f.note} onChange={(e) => set({ note: e.target.value })} placeholder="Condiții, termene de livrare, comandă minimă…" />
+          {supplier && <Switch checked={f.active} onChange={(v) => set({ active: v })} label="Furnizor activ" description="Furnizorii inactivi nu apar la recepții noi." />}
+        </FormSection>
       </div>
     </Drawer>
   );
@@ -84,34 +96,41 @@ function SupplierDetail({ id, onClose, onEdit }) {
       {!s ? (
         <Skeleton className="h-60" />
       ) : (
-        <div className="space-y-6">
-          <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13.5px]">
-            {s.phone && <a href={`tel:${s.phone.replace(/\s/g, "")}`} className="flex items-center gap-1.5 text-fg-2 hover:text-accent"><Phone size={15} />{s.phone}</a>}
-            {s.email && <a href={`mailto:${s.email}`} className="flex items-center gap-1.5 text-fg-2 hover:text-accent"><EnvelopeSimple size={15} />{s.email}</a>}
-            {s.website && <a href={s.website} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-fg-2 hover:text-accent"><Globe size={15} />{s.website.replace(/^https?:\/\//, "")}</a>}
+        <div className="space-y-8">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Stat icon={TrayArrowDown} label="Recepții" value={num(s.arrivals?.length || 0)} sub="ultimele 100 de documente" />
+            <Stat icon={HandCoins} label="Total achiziții" value={money((s.arrivals || []).reduce((t, a) => t + (a.total || 0), 0))} sub={s.paymentTermDays ? `termen de plată ${s.paymentTermDays} zile` : "plată la livrare"} />
+            <Stat icon={Truck} label="Ultima recepție" value={s.arrivals?.[0] ? relativeTime(s.arrivals[0].createdAt) : "—"} sub={s.arrivals?.[0] ? formatDate(s.arrivals[0].createdAt) : "încă nu există"} />
           </div>
-          <DetailList cols={2} items={[["Persoană de contact", s.contactPerson], ["IDNO", s.idno], ["IBAN", s.iban], ["Adresă", s.address], ["Termen de plată", s.paymentTermDays ? `${s.paymentTermDays} zile` : null], ["Mărci", (s.brands || []).join(", ")]]} />
-          {s.note && <p className="whitespace-pre-line rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-fg-2">{s.note}</p>}
-          <div>
-            <h4 className="mb-2 text-[13px] font-semibold text-fg">Recepții de la acest furnizor</h4>
+          <FormSection icon={Phone} title="Contact" description="Date pentru comenzi și reclamații.">
+            <div className="flex flex-wrap gap-2">
+              {s.phone && <a href={`tel:${s.phone.replace(/\s/g, "")}`} className="inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-[13.5px] text-fg-2 transition-colors hover:border-accent hover:text-accent"><Phone size={16} />{s.phone}</a>}
+              {s.email && <a href={`mailto:${s.email}`} className="inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-[13.5px] text-fg-2 transition-colors hover:border-accent hover:text-accent"><EnvelopeSimple size={16} />{s.email}</a>}
+              {s.website && <a href={s.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-[13.5px] text-fg-2 transition-colors hover:border-accent hover:text-accent"><Globe size={16} />{s.website.replace(/^https?:\/\//, "")}</a>}
+              {!s.phone && !s.email && !s.website && <p className="text-[13px] text-fg-3">Nu sunt completate date de contact.</p>}
+            </div>
+            <DetailList cols={2} items={[["Persoană de contact", s.contactPerson], ["Adresă", s.address], ["IDNO", s.idno], ["IBAN", s.iban], ["Mărci", (s.brands || []).join(", ")]]} />
+            {s.note && <p className="whitespace-pre-line rounded-xl bg-surface-2 px-4 py-3 text-[13px] leading-relaxed text-fg-2">{s.note}</p>}
+          </FormSection>
+          <FormSection icon={TrayArrowDown} title="Recepții" description="Documentele de intrare a mărfii de la acest furnizor.">
             {s.arrivals?.length ? (
-              <ul className="divide-y divide-line rounded-xl border border-line">
+              <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
                 {s.arrivals.map((a) => (
                   <li key={a._id}>
-                    <Link href={`/receptie/${a._id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[13px] hover:bg-surface-2">
-                      <span>
+                    <Link href={`/receptie/${a._id}`} className="flex items-center justify-between gap-3 px-4 py-3 text-[13px] transition-colors hover:bg-surface-2">
+                      <span className="min-w-0">
                         <span className="font-medium text-fg">{a.number || "Recepție"}</span>
                         <span className="ml-2 text-fg-3">{formatDate(a.createdAt)} · {a.warehouse?.name}{a.supplierInvoice ? ` · fact. ${a.supplierInvoice}` : ""}</span>
                       </span>
-                      <span className="tnum font-medium text-fg">{money(a.total || 0)}</span>
+                      <span className="tnum shrink-0 font-semibold text-fg">{money(a.total || 0)}</span>
                     </Link>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-[13px] text-fg-3">Nicio recepție încă.</p>
+              <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-[13px] text-fg-3">Nicio recepție încă.</p>
             )}
-          </div>
+          </FormSection>
         </div>
       )}
     </Drawer>

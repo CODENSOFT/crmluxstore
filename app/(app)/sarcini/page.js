@@ -8,10 +8,10 @@ import { useQueryState } from "@/lib/useQueryState";
 import { useUser } from "@/app/_components/user";
 import { formatDate, relativeTime, ymd } from "@/lib/format";
 import { TASK_STATUS, TASK_PRIORITY } from "@/lib/constants";
-import { PageHeader, Button, Field, Input, Select, Textarea, Segmented, Badge, Avatar, Skeleton, cx } from "@/app/_components/ui";
+import { PageHeader, Button, Field, FormSection, Input, Select, Textarea, Segmented, Badge, Avatar, Skeleton, cx } from "@/app/_components/ui";
 import { Drawer, useConfirm, useToast } from "@/app/_components/overlay";
 import { CustomerPicker, SelectedChip } from "@/app/_components/pickers";
-import { Plus, CalendarBlank, Trash, User, Buildings, Receipt, CheckCircle, Circle, Timer } from "@/app/_components/icons";
+import { Plus, CalendarBlank, Trash, User, Buildings, Receipt, CheckCircle, Circle, Timer, ListChecks, LinkIcon } from "@/app/_components/icons";
 
 const COL_ICON = { todo: Circle, in_progress: Timer, done: CheckCircle };
 
@@ -72,13 +72,16 @@ function TaskFormBody({ open, onClose, task, presetCustomer, onSaved, onDelete }
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-8">
+        <FormSection icon={ListChecks} title="Sarcina" description="Ce trebuie făcut, pe scurt, plus detaliile necesare.">
         <Field label="Ce trebuie făcut" required>
           <Input autoFocus value={f.title || ""} onChange={(e) => set({ title: e.target.value })} disabled={!canEdit} placeholder="ex: Sunați spălătoria AquaWash pentru comanda de chimie" />
         </Field>
         <Field label="Detalii">
-          <Textarea rows={4} value={f.description || ""} onChange={(e) => set({ description: e.target.value })} disabled={!canEdit} />
+          <Textarea rows={5} value={f.description || ""} onChange={(e) => set({ description: e.target.value })} disabled={!canEdit} />
         </Field>
+        </FormSection>
+        <FormSection icon={CalendarBlank} title="Planificare" description="Cine se ocupă, până când și cât de urgent este.">
         <div className="grid gap-3 sm:grid-cols-2">
           {isAdmin && users && (
             <Field label="Responsabil">
@@ -106,7 +109,9 @@ function TaskFormBody({ open, onClose, task, presetCustomer, onSaved, onDelete }
             </Field>
           )}
         </div>
-        <Field label="Client (opțional)">
+        </FormSection>
+        <FormSection icon={LinkIcon} title="Legături" description="Opțional — clientul sau comanda la care se referă sarcina.">
+        <Field label="Client">
           {customer ? (
             <SelectedChip icon={customer.type === "company" ? Buildings : User} title={customer.name} subtitle={customer.phone} onClear={canEdit ? () => setCustomer(null) : undefined} />
           ) : (
@@ -118,6 +123,7 @@ function TaskFormBody({ open, onClose, task, presetCustomer, onSaved, onDelete }
             <Receipt size={15} /> Comanda {task.order.number}
           </Link>
         )}
+        </FormSection>
       </div>
     </Drawer>
   );

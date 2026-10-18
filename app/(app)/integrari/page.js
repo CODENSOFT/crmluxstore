@@ -7,7 +7,7 @@ import { useQueryState } from "@/lib/useQueryState";
 import { formatDateTime, relativeTime, num } from "@/lib/format";
 import { WEBHOOK_EVENTS } from "@/lib/constants";
 import {
-  Card, CardHeader, PageHeader, Tabs, Button, Field, Input, PasswordInput, Select, Switch, Badge, Alert, EmptyState, Skeleton, Checkbox, Segmented, cx, Dot,
+  Card, CardHeader, PageHeader, Tabs, Button, Field, Input, PasswordInput, Select, Switch, Badge, Alert, EmptyState, Skeleton, Checkbox, Segmented, cx, Dot, FormSection,
 } from "@/app/_components/ui";
 import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
 import { Modal, Drawer, Menu, useConfirm, useToast } from "@/app/_components/overlay";
@@ -495,18 +495,21 @@ function HookFormBody({ open, onClose, hook, onSaved }) {
   };
   return (
     <Drawer open={open} onClose={onClose} title={hook ? "Editare webhook" : "Webhook nou"} footer={<><Button variant="ghost" onClick={onClose}>Renunță</Button><Button variant="primary" loading={busy} disabled={!f.name.trim() || !/^https?:\/\//.test(f.url)} onClick={save}>Salvează</Button></>}>
-      <div className="space-y-4">
-        <Field label="Nume"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="ex: Bot Telegram comenzi" /></Field>
-        <Field label="Adresa (URL)" hint="Primește cereri POST cu JSON"><Input value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} placeholder="https://…" /></Field>
-        <div>
-          <div className="mb-2 text-[12.5px] font-medium text-fg-2">Evenimente</div>
+      <div className="space-y-8">
+        <FormSection icon={WebhooksLogo} title="Destinație" description="Adresa care primește evenimentele prin POST JSON, semnate cu X-Lux-Signature.">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <Field label="Nume"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="ex: Bot Telegram comenzi" /></Field>
+            <Field label="Adresa (URL)" hint="Primește cereri POST cu JSON"><Input value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} placeholder="https://…" /></Field>
+          </div>
+        </FormSection>
+        <FormSection icon={Lightning} title="Evenimente" description="Alegeți ce modificări din CRM se trimit către această adresă.">
           <Checkbox checked={all} onChange={(v) => setF({ ...f, events: v ? ["*"] : [] })} label="Toate evenimentele" />
           {!all && (
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {WEBHOOK_EVENTS.map((e) => <Checkbox key={e.key} checked={f.events.includes(e.key)} onChange={(v) => toggle(e.key, v)} label={e.label} description={e.key} />)}
             </div>
           )}
-        </div>
+        </FormSection>
       </div>
     </Drawer>
   );

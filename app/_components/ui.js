@@ -136,6 +136,35 @@ export function PageHeader({ title, description, actions, back, eyebrow, childre
 }
 
 /* ---------------- Formulare ---------------- */
+/**
+ * Sectiune de formular: pe ecrane late titlul + explicatia stau in stanga, campurile in dreapta.
+ * Sectiunile consecutive sunt despartite de o linie fina.
+ */
+export function FormSection({ icon: Icon, title, description, aside, children, className }) {
+  return (
+    <section
+      className={cx(
+        "grid gap-x-12 gap-y-4 border-t border-line pt-7 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(190px,250px)_minmax(0,1fr)]",
+        className
+      )}
+    >
+      <div className="lg:pt-0.5">
+        <div className="flex items-center gap-2.5">
+          {Icon && (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+              <Icon size={17} weight="duotone" />
+            </span>
+          )}
+          <h4 className="text-[14px] font-semibold tracking-tight text-fg">{title}</h4>
+        </div>
+        {description && <p className="mt-2 max-w-sm text-[12.5px] leading-relaxed text-fg-3">{description}</p>}
+        {aside && <div className="mt-3">{aside}</div>}
+      </div>
+      <div className="min-w-0 space-y-4">{children}</div>
+    </section>
+  );
+}
+
 export function Field({ label, hint, error, required, children, className, htmlFor, aside }) {
   return (
     <div className={cx("block", className)}>
