@@ -1,5 +1,6 @@
 import { db, isUuid } from "@/lib/db";
-import { route, readJson, forbidden, notFound, badRequest } from "@/lib/api";
+import { route, readJson, forbidden, notFound, badRequest, requirePerm } from "@/lib/api";
+import { can } from "@/lib/permissions";
 import { getTask } from "@/lib/tasks";
 import { notifyTaskAssigned } from "@/lib/notify";
 
@@ -7,7 +8,7 @@ async function load(id, user) {
   const [task] = isUuid(id) ? await db()`select * from tasks where id = ${id}` : [];
   if (!task) throw notFound("Sarcina nu există");
   const own = String(task.assignedToId) === String(user.id) || String(task.createdById) === String(user.id);
-  if (user.role !== "admin" && !own) throw forbidden();
+  if (!can(user, "tasks.manage") && !own) throw forbidden();
   return task;
 }
 
@@ -15,7 +16,7 @@ export const PATCH = route(async ({ req, params, user }) => {
   const b = await readJson(req);
   const task = await load(params.id, user);
   const sql = db();
-  const canEdit = user.role === "admin" || String(task.createdById) === String(user.id);
+  const canEdit = can(user, "tasks.manage") || String(task.createdById) === String(user.id);
   const patch = {};
   if (b.status) {
     if (!["todo", "in_progress", "done"].includes(b.status)) throw badRequest("Status invalid");
@@ -34,7 +35,7 @@ export const PATCH = route(async ({ req, params, user }) => {
     if (b.customer !== undefined) patch.customerId = isUuid(String(b.customer || "")) ? b.customer : null;
     if (b.order !== undefined) patch.orderId = isUuid(String(b.order || "")) ? b.order : null;
     if (b.assignedTo && String(b.assignedTo) !== String(task.assignedToId)) {
-      if (user.role !== "admin") throw forbidden("Doar administratorul poate reatribui sarcini");
+      if (!can(user, "tasks.manage")) throw forbidden("Nu aveți dreptul să reatribuiți sarcini");
       const [u] = isUuid(b.assignedTo) ? await sql`select id from users where id = ${b.assignedTo} and active` : [];
       if (!u) throw badRequest("Utilizator inexistent");
       patch.assignedToId = u._id;
@@ -48,8 +49,9 @@ export const PATCH = route(async ({ req, params, user }) => {
 });
 
 export const DELETE = route(async ({ params, user }) => {
+  requirePerm(user, "delete");
   const task = await load(params.id, user);
-  if (user.role !== "admin" && String(task.createdById) !== String(user.id)) throw forbidden();
+  if (!can(user, "tasks.manage") && String(task.createdById) !== String(user.id)) throw forbidden();
   await db()`delete from tasks where id = ${task._id}`;
   return { deleted: true };
 });

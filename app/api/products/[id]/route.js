@@ -75,7 +75,7 @@ export const PATCH = route(async ({ req, params, user }) => {
   const dto = productDTO({ ...fresh, photo: undefined });
   emit("product.updated", dto);
   return fresh;
-});
+}, { perm: "products.manage" });
 
 // Produsele cu istoric (comenzi / miscari) se dezactiveaza, nu se sterg — istoricul ramane corect
 export const DELETE = route(
@@ -97,5 +97,5 @@ export const DELETE = route(
     emit("product.deleted", { id: product._id, sku: product.sku || null, externalId: product.externalId || null });
     return { deleted: true };
   },
-  { auth: "admin" }
+  { perm: ["products.manage", "delete"] }
 );

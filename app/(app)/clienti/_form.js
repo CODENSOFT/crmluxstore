@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { apiPatch, apiPost } from "@/lib/client";
 import { invalidate, useApi } from "@/lib/useApi";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { CUSTOMER_SEGMENTS, CUSTOMER_SOURCES } from "@/lib/constants";
 import { Button, Field, FormSection, Input, NumberInput, Select, Textarea, Segmented, Alert } from "@/app/_components/ui";
 import { Drawer, useToast } from "@/app/_components/overlay";
@@ -53,7 +53,7 @@ export function CustomerForm(props) {
 function CustomerFormBody({ open, onClose, customer, onSaved }) {
   const toast = useToast();
   const user = useUser();
-  const { data: users } = useApi(user.role === "admin" ? "/api/users" : null);
+  const { data: users } = useApi(can(user, "customers.manage") ? "/api/users" : null);
   const [f, setF] = useState(() => initial(customer));
   const [saving, setSaving] = useState(false);
   const [dup, setDup] = useState(null);

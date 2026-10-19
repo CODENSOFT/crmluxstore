@@ -9,4 +9,4 @@ export const GET = route(async ({ query }) => {
   return listDocs("writeoffs", query, extra);
 });
 
-export const POST = route(async ({ req, user }) => createWriteoff(await readJson(req), user));
+export const POST = route(async ({ req, user }) => createWriteoff(await readJson(req), user), { perm: "stock.writeoff" });

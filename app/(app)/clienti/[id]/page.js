@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiDelete, apiPost } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { money, moneyShort, num, formatDate, relativeTime } from "@/lib/format";
 import { segmentLabel, sourceLabel, channelLabel, TASK_PRIORITY } from "@/lib/constants";
 import { Card, CardHeader, PageHeader, Button, ButtonLink, Badge, Stat, DetailList, StageBadge, PaymentBadge, Skeleton, ErrorState, EmptyState, cx } from "@/app/_components/ui";
@@ -87,9 +87,11 @@ export default function CustomerPage({ params }) {
                 <Phone size={16} weight="bold" /> Sună
               </a>
             )}
-            <Button icon={PencilSimple} onClick={() => setEdit(true)}>
-              Editează
-            </Button>
+            {can(user, "customers.manage") && (
+              <Button icon={PencilSimple} onClick={() => setEdit(true)}>
+                Editează
+              </Button>
+            )}
             <ButtonLink href={`/comenzi/nou?customer=${c._id}`} variant="primary" icon={Plus}>
               Comandă nouă
             </ButtonLink>
@@ -98,8 +100,8 @@ export default function CustomerPage({ params }) {
               items={[
                 { label: "Sarcină pentru acest client", icon: CheckSquareOffset, href: `/sarcini?nou=1&customer=${c._id}` },
                 { label: "Recalculează statisticile", icon: ArrowsClockwise, onClick: recalc },
-                user.role === "admin" && { divider: true },
-                user.role === "admin" && { label: "Șterge / dezactivează", icon: Trash, onClick: remove, danger: true },
+                can(user, ["customers.manage", "delete"]) && { divider: true },
+                can(user, ["customers.manage", "delete"]) && { label: "Șterge / dezactivează", icon: Trash, onClick: remove, danger: true },
               ]}
             />
           </>

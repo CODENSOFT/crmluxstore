@@ -16,5 +16,5 @@ export const POST = route(
     const [c] = await sql`insert into categories ${sql({ name: name.trim(), parentId: parent || null, color: color || null, sort: max + 1 })} returning *`;
     return c;
   },
-  { auth: "admin" }
+  { perm: "products.manage" }
 );

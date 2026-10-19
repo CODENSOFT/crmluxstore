@@ -23,9 +23,17 @@ Construit cu **Next.js 16 (App Router) + Postgres (Supabase) + Tailwind CSS 4**,
 | **Sarcini** | Tablou Kanban cu drag & drop, termene, priorități, legate de clienți / comenzi, notificări |
 | **Rapoarte** | Vânzări (zi / săptămână / lună, categorii, canale, manageri, metode de plată), produse (clasificare ABC, stoc fără mișcare), clienți, datorii (cu restanțe), stoc, casări — export Excel |
 | **Integrări** | Site luxstore.md (WooCommerce), chei API, API v1 pentru 1C, webhook-uri de ieșire semnate, jurnal de sincronizare |
-| **Administrare** | Utilizatori (admin / manager), istoric activitate, setări companie / TVA / livrare / stoc |
+| **Administrare** | Utilizatori și drepturi (administrator / angajat + drepturi suplimentare pe persoană), istoric activitate, setări companie / TVA / livrare / stoc |
 
 Extra: căutare globală **Ctrl/⌘ + K**, tasta **N** = comandă nouă, temă luminoasă / întunecată, interfață adaptată pentru telefon.
+
+---
+
+## Roluri și drepturi
+
+- **Administrator** — acces complet.
+- **Angajat** — munca de zi cu zi, **fără nicio ștergere**: comenzile proprii și cele noi de pe site, comenzi noi (cu aprobare, dacă e activată), plăți, sarcinile proprii, vizualizare produse și stoc, recepții de marfă, clienți și furnizori noi.
+- **Drepturi suplimentare** (bifate de administrator în *Utilizatori*, cu seturi rapide „Vânzări”, „Depozit”, „Șef vânzări”): vede toate comenzile · aprobă comenzi · produse și prețuri · editare clienți / furnizori · transferuri · casări · inventariere · sarcinile echipei · rapoarte · ștergere. Se aplică imediat; definite în `lib/permissions.js`.
 
 ---
 

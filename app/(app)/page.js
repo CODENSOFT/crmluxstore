@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useApi } from "@/lib/useApi";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { money, moneyShort, formatDateShort, relativeTime, num, pct, formatDate, plural } from "@/lib/format";
 import { channelLabel, UNIT_LABELS, TASK_PRIORITY } from "@/lib/constants";
 import { Card, CardHeader, Stat, PageHeader, ButtonLink, StageBadge, Badge, Skeleton, EmptyState, cx, Segmented, PaymentBadge } from "@/app/_components/ui";
@@ -57,11 +57,13 @@ export default function Dashboard() {
     d && d.prevMonth.revenue > 0 ? ((d.month.revenue - d.prevMonth.revenue) / d.prevMonth.revenue) * 100 : null;
   const marginPct = d && d.month.items > 0 ? (d.month.profit / d.month.items) * 100 : 0;
   const isAdmin = user.role === "admin";
+  const approver = can(user, "orders.approve");
+  const reports = can(user, "reports.view");
   const firstName = user.name.split(" ")[0];
 
   const attention = [];
   if (d?.counts.siteNew) attention.push({ href: "/comenzi?status=new&channel=site", icon: Globe, tone: "accent", title: `${plural(d.counts.siteNew, "comandă nouă", "comenzi noi", "de comenzi noi")} de pe site`, text: "Confirmați telefonic și treceți-le în pregătire" });
-  if (isAdmin && d?.counts.pending_approval) attention.push({ href: "/comenzi?status=pending_approval", icon: Clock, tone: "warn", title: `${d.counts.pending_approval} așteaptă aprobarea ta`, text: "Comenzi create de manageri" });
+  if (approver && d?.counts.pending_approval) attention.push({ href: "/comenzi?status=pending_approval", icon: Clock, tone: "warn", title: `${d.counts.pending_approval} așteaptă aprobarea ta`, text: "Comenzi create de angajați" });
   if (d && d.counts.new - d.counts.siteNew > 0) attention.push({ href: "/comenzi?status=new", icon: Receipt, tone: "violet", title: `${d.counts.new - d.counts.siteNew} comenzi noi (ciorne)`, text: "Neconfirmate încă" });
   if (d?.lowStock.count) attention.push({ href: "/stoc?tab=reorder", icon: Warning, tone: "bad", title: `${plural(d.lowStock.count, "produs", "produse", "de produse")} sub stocul minim`, text: "Vezi lista de reaprovizionare" });
   if (d?.overdueTasks) attention.push({ href: "/sarcini", icon: CheckSquareOffset, tone: "bad", title: `${plural(d.overdueTasks, "sarcină întârziată", "sarcini întârziate", "de sarcini întârziate")}`, text: "Termenul a trecut" });
@@ -111,7 +113,7 @@ export default function Dashboard() {
           value={moneyShort(d?.month.revenue, cur)}
           delta={delta}
           sub={d ? `vs. aceeași perioadă luna trecută · ${d.month.orders} comenzi` : null}
-          href="/rapoarte"
+          href={reports ? "/rapoarte" : undefined}
         />
         <Stat
           label="Marjă brută (luna)"
@@ -127,7 +129,7 @@ export default function Dashboard() {
           loading={loading && !d}
           value={moneyShort(d?.debt.amount, cur)}
           sub={d ? (d.debt.overdue > 0 ? `${moneyShort(d.debt.overdue, cur)} cu termen depășit` : `${d.debt.orders} comenzi neachitate`) : null}
-          href="/rapoarte?tab=debts"
+          href={reports ? "/rapoarte?tab=debts" : undefined}
         />
       </div>
 
@@ -176,7 +178,7 @@ export default function Dashboard() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <Card>
-          <CardHeader title="Cele mai vândute produse" description="Luna curentă" icon={Package} action={<Link href="/rapoarte?tab=products" className="text-[12.5px] font-medium text-accent hover:underline">Raport</Link>} />
+          <CardHeader title="Cele mai vândute produse" description="Luna curentă" icon={Package} action={reports && <Link href="/rapoarte?tab=products" className="text-[12.5px] font-medium text-accent hover:underline">Raport</Link>} />
           <div className="px-5 pb-5">
             {loading && !d ? (
               <Skeleton className="h-40" />

@@ -8,7 +8,8 @@ import { useUser } from "@/app/_components/user";
 import { roleLabel } from "@/lib/constants";
 import { Card, CardHeader, PageHeader, Tabs, Field, Input, NumberInput, PasswordInput, Select, Textarea, Switch, Button, Skeleton, IconButton, Avatar } from "@/app/_components/ui";
 import { useToast } from "@/app/_components/overlay";
-import { Buildings, Receipt, Truck, Stack, UserCircle, Lock, Plus, Trash, FloppyDisk } from "@/app/_components/icons";
+import { Buildings, Receipt, Truck, Stack, UserCircle, Lock, Plus, Trash, FloppyDisk, ShieldCheck, CheckCircle } from "@/app/_components/icons";
+import { PERMISSIONS } from "@/lib/permissions";
 
 function SaveBar({ busy, onSave, dirty }) {
   return (
@@ -188,7 +189,34 @@ function ProfileForm({ me, mutate }) {
           <Field label="Repetați parola nouă"><PasswordInput value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} autoComplete="new-password" /></Field>
         </div>
       </Section>
+      <MyRights />
     </div>
+  );
+}
+
+// Ce poate face utilizatorul curent (angajatii isi vad drepturile primite de la administrator)
+function MyRights() {
+  const user = useUser();
+  if (user.role === "admin") return null;
+  const extra = PERMISSIONS.filter((p) => user.permissions?.includes(p.key));
+  return (
+    <Section title="Drepturile mele" description="Drepturile suplimentare se acordă de administrator, din Utilizatori." icon={ShieldCheck}>
+      {extra.length ? (
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {extra.map((p) => (
+            <li key={p.key} className="flex items-start gap-2 rounded-lg bg-surface-2/70 px-3 py-2 text-[13px] text-fg-2">
+              <CheckCircle size={16} weight="fill" className="mt-0.5 shrink-0 text-ok" />
+              <span>
+                <span className="font-medium text-fg">{p.label}</span>
+                {p.description && <span className="block text-[12px] text-fg-3">{p.description}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[13px] text-fg-3">Aveți drepturile de bază ale unui angajat: comenzile și sarcinile proprii, vizualizarea produselor și a stocului, recepții de marfă, clienți și furnizori noi.</p>
+      )}
+    </Section>
   );
 }
 

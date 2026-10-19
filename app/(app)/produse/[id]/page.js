@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiDelete, apiPost, apiPatch } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { money, moneyShort, num, pct, formatDate, formatDateTime, relativeTime } from "@/lib/format";
 import { UNIT_LABELS, UNIT_NAMES, MOVEMENT_TYPES } from "@/lib/constants";
 import { Card, CardHeader, PageHeader, Button, ButtonLink, Badge, Stat, DetailList, Skeleton, ErrorState, EmptyState, Field, NumberInput, Input, Select, cx } from "@/app/_components/ui";
@@ -90,6 +90,8 @@ export default function ProductPage({ params }) {
   const toast = useToast();
   const confirm = useConfirm();
   const isAdmin = user.role === "admin";
+  const manage = can(user, "products.manage");
+  const canDelete = can(user, ["products.manage", "delete"]);
   const [page, setPage] = useState(1);
   const { data: p, error, reload, mutate } = useApi(`/api/products/${id}`, { keepPrevious: false });
   const { data: mov, reload: reloadMov } = useApi(`/api/products/${id}/movements?page=${page}&limit=20`);
@@ -145,18 +147,22 @@ export default function ProductPage({ params }) {
             <ButtonLink href={`/receptie/nou?product=${p._id}`} icon={TrayArrowDown}>
               Recepție
             </ButtonLink>
-            <Button variant="primary" icon={PencilSimple} onClick={() => setEdit(true)}>
-              Editează
-            </Button>
+            {manage && (
+              <Button variant="primary" icon={PencilSimple} onClick={() => setEdit(true)}>
+                Editează
+              </Button>
+            )}
+            {(manage || isAdmin) && (
             <Menu
               trigger={<Button icon={DotsThree} aria-label="Mai multe" />}
               items={[
                 isAdmin && { label: "Corecție manuală de stoc", icon: Sliders, onClick: () => setAdjust(true) },
-                { label: p.active === false ? "Activează produsul" : "Dezactivează produsul", icon: p.active === false ? CheckCircle : Prohibit, onClick: toggleActive },
-                isAdmin && { divider: true },
-                isAdmin && { label: "Șterge produsul", icon: Trash, onClick: remove, danger: true },
+                manage && { label: p.active === false ? "Activează produsul" : "Dezactivează produsul", icon: p.active === false ? CheckCircle : Prohibit, onClick: toggleActive },
+                canDelete && { divider: true },
+                canDelete && { label: "Șterge produsul", icon: Trash, onClick: remove, danger: true },
               ]}
             />
+            )}
           </>
         }
       />
@@ -252,11 +258,13 @@ export default function ProductPage({ params }) {
               {p.photo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={/^https?:\/\//.test(p.photo) ? p.photo : `/api/products/${p._id}/photo?v=${new Date(p.updatedAt).getTime()}`} alt={p.name} className="h-full w-full object-contain p-4" />
-              ) : (
+              ) : manage ? (
                 <button type="button" onClick={() => setEdit(true)} className="flex flex-col items-center gap-2 text-[13px] text-fg-3 hover:text-fg">
                   <ImageIcon size={36} />
                   Adaugă fotografie
                 </button>
+              ) : (
+                <ImageIcon size={36} className="text-fg-4" />
               )}
             </div>
             <div className="space-y-3 px-5 py-4">

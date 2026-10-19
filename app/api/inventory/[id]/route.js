@@ -21,7 +21,7 @@ export const GET = route(async ({ params }) => {
 export const PATCH = route(async ({ req, params }) => {
   await getInventory(params.id);
   return updateInventory(params.id, await readJson(req));
-});
+}, { perm: "stock.inventory" });
 
 // { action: "complete" | "cancel" }
 export const POST = route(async ({ req, params, user }) => {
@@ -33,4 +33,4 @@ export const POST = route(async ({ req, params, user }) => {
   }
   if (body.action === "cancel") return cancelInventory(params.id);
   throw badRequest("Acțiune invalidă");
-});
+}, { perm: "stock.inventory" });

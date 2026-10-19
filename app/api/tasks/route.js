@@ -1,5 +1,6 @@
 import { db, isUuid, where } from "@/lib/db";
 import { route, readJson, badRequest } from "@/lib/api";
+import { can } from "@/lib/permissions";
 import { emit } from "@/lib/events";
 import { notifyTaskAssigned } from "@/lib/notify";
 import { taskSelect, getTask } from "@/lib/tasks";
@@ -9,7 +10,7 @@ const PRIORITIES = ["low", "normal", "high"];
 export const GET = route(async ({ user, query }) => {
   const sql = db();
   const conds = [];
-  if (user.role !== "admin" || query.get("mine") === "1") {
+  if (!can(user, "tasks.manage") || query.get("mine") === "1") {
     conds.push(sql`(t.assigned_to_id = ${user.id} or t.created_by_id = ${user.id})`);
   }
   for (const [param, col] of [["assignedTo", "assigned_to_id"], ["customer", "customer_id"], ["order", "order_id"]]) {
@@ -29,7 +30,7 @@ export const POST = route(async ({ req, user }) => {
   const sql = db();
   let assignee = user.id;
   if (b.assignedTo && b.assignedTo !== user.id) {
-    if (user.role !== "admin") throw badRequest("Doar administratorul poate atribui sarcini altor persoane");
+    if (!can(user, "tasks.manage")) throw badRequest("Nu aveți dreptul să atribuiți sarcini altor persoane");
     const [u] = isUuid(b.assignedTo) ? await sql`select id from users where id = ${b.assignedTo} and active` : [];
     if (!u) throw badRequest("Utilizatorul ales nu există");
     assignee = u._id;

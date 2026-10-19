@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { can } from "@/lib/permissions";
 import { route } from "@/lib/api";
 import { visibilityFilter } from "@/lib/orderService";
 
@@ -12,7 +13,7 @@ export const GET = route(async ({ user }) => {
       (select count(*)::int from orders o where o.pending_edit is not null) as edit_requests,
       (select count(*)::int from tasks t where t.assigned_to_id = ${user.id} and t.status <> 'done') as tasks,
       (select count(*)::int from notifications n where n.recipient_id = ${user.id} and not n.read) as unread`;
-  const isAdmin = user.role === "admin";
+  const isAdmin = can(user, "orders.approve");
   return {
     newOrders: r.newOrders,
     pending: r.pending,

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { apiDelete, apiPatch, apiPost } from "@/lib/client";
 import { useApi, qs, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { formatDate, relativeTime, ymd } from "@/lib/format";
 import { TASK_STATUS, TASK_PRIORITY } from "@/lib/constants";
 import { PageHeader, Button, Field, FormSection, Input, Select, Textarea, Segmented, Badge, Avatar, Skeleton, cx } from "@/app/_components/ui";
@@ -22,7 +22,7 @@ function TaskForm(props) {
 function TaskFormBody({ open, onClose, task, presetCustomer, onSaved, onDelete }) {
   const user = useUser();
   const toast = useToast();
-  const isAdmin = user.role === "admin";
+  const isAdmin = can(user, "tasks.manage");
   const { data: users } = useApi(isAdmin ? "/api/users" : null);
   const { data: preset } = useApi(!task && presetCustomer ? `/api/customers/${presetCustomer}` : null);
   const [f, setF] = useState(() => ({
@@ -62,7 +62,7 @@ function TaskFormBody({ open, onClose, task, presetCustomer, onSaved, onDelete }
       description={task ? `Creată de ${task.createdBy?.name || "—"} · ${relativeTime(task.createdAt)}` : null}
       footer={
         <>
-          {task && canEdit && (
+          {task && canEdit && can(user, "delete") && (
             <Button variant="danger-ghost" icon={Trash} className="mr-auto" onClick={() => onDelete(task)}>
               Șterge
             </Button>
@@ -178,7 +178,7 @@ function Inner() {
   const user = useUser();
   const toast = useToast();
   const confirm = useConfirm();
-  const isAdmin = user.role === "admin";
+  const isAdmin = can(user, "tasks.manage");
   const [f, setF] = useQueryState({ scope: isAdmin ? "all" : "mine" });
   const [formState, setForm] = useState({ open: false, task: null });
   const form = f.nou === "1" ? { open: true, task: null, customer: f.customer } : formState;

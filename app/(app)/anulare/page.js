@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { apiPost } from "@/lib/client";
+import { useUser, can } from "@/app/_components/user";
 import { useApi, qs, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { money, num, formatDateTime, relativeTime } from "@/lib/format";
@@ -96,6 +97,7 @@ function WriteoffFormBody({ open, onClose }) {
 }
 
 function Inner() {
+  const user = useUser();
   const [f, setF] = useQueryState({ page: "1" });
   const [open, setOpen] = useState(false);
   const { data, loading, error, reload } = useApi(`/api/writeoffs${qs({ q: f.q, reason: f.reason, warehouse: f.warehouse, page: f.page, limit: 30 })}`);
@@ -112,7 +114,7 @@ function Inner() {
       <PageHeader
         title="Casări"
         description="Produse scoase din stoc: expirate, deteriorate, defecte, consum intern sau mostre."
-        actions={<Button variant="primary" icon={Plus} onClick={() => setOpen(true)}>Casare nouă</Button>}
+        actions={can(user, "stock.writeoff") && <Button variant="primary" icon={Plus} onClick={() => setOpen(true)}>Casare nouă</Button>}
       />
       <Card className="overflow-hidden">
         <Toolbar>

@@ -95,4 +95,4 @@ export const POST = route(async ({ req, user }) => {
   delete fresh.photo;
   emit("product.created", () => productDTO(fresh));
   return fresh;
-});
+}, { perm: "products.manage" });

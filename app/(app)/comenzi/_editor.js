@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, apiPost, apiPatch } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { money, num } from "@/lib/format";
 import { CHANNELS, PAYMENT_METHODS, UNIT_LABELS, CUSTOMER_SEGMENTS, segmentLabel } from "@/lib/constants";
 import {
@@ -134,7 +134,8 @@ export default function OrderEditor({ order, template }) {
   const router = useRouter();
   const toast = useToast();
   const user = useUser();
-  const isAdmin = user.role === "admin";
+  // Aprobatorul (admin sau angajat cu drept) creeaza comenzi direct, fara aprobare
+  const isAdmin = can(user, "orders.approve");
   const editing = !!order;
   const { data: products } = useApi("/api/products?light=1");
   const { data: warehouses } = useApi("/api/warehouses");

@@ -301,11 +301,10 @@ const REPORTS = { sales, products, customers, debts, stock, writeoffs };
 export const GET = route(async ({ params, query, user }) => {
   const fn = REPORTS[params.type];
   if (!fn) throw badRequest("Raport necunoscut");
-  if (params.type === "writeoffs" && user.role !== "admin") throw badRequest("Raport disponibil doar administratorului");
   const data = await fn(query, user);
   const { csv, ...rest } = data;
   if (query.get("format") === "csv") {
     return csvResponse(csv(), `raport_${params.type}_${new Date().toISOString().slice(0, 10)}.csv`);
   }
   return rest;
-});
+}, { perm: "reports.view" });

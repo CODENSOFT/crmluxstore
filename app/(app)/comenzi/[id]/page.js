@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiPatch, apiPost, apiDelete } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { money, num, formatDate, formatDateTime, relativeTime, ymd } from "@/lib/format";
 import { channelLabel, paymentMethodLabel, PAYMENT_METHODS, UNIT_LABELS, segmentLabel, MOVEMENT_TYPES } from "@/lib/constants";
 import { ORDER_STAGES, stageInfo, nextStage, prevStage, isClosed } from "@/lib/orderStages";
@@ -119,7 +119,7 @@ function ItemsTable({ items, order, compare }) {
   );
 }
 
-function Payments({ order, isAdmin, onChange }) {
+function Payments({ order, canDelete, onChange }) {
   const toast = useToast();
   const confirm = useConfirm();
   const remaining = Math.max(0, Math.round((order.total - (order.paidAmount || 0)) * 100) / 100);
@@ -185,7 +185,7 @@ function Payments({ order, isAdmin, onChange }) {
                 {formatDate(p.date)}
                 {p.createdByName ? ` · ${p.createdByName}` : ""}
               </span>
-              {isAdmin && (
+              {canDelete && (
                 <button type="button" onClick={() => remove(p)} className="rounded p-1 text-fg-4 hover:bg-bad-soft hover:text-bad" aria-label="Șterge plata">
                   <Trash size={14} />
                 </button>
@@ -297,7 +297,9 @@ export default function OrderPage({ params }) {
   const user = useUser();
   const toast = useToast();
   const confirm = useConfirm();
-  const isAdmin = user.role === "admin";
+  // Pentru comenzi, "isAdmin" = administrator sau angajat cu dreptul de aprobare
+  const isAdmin = can(user, "orders.approve");
+  const canDelete = can(user, "delete");
   const { data: order, error, reload, mutate } = useApi(`/api/orders/${id}`, { keepPrevious: false });
   const { data: history, reload: reloadHistory } = useApi(`/api/orders/${id}/history`, { keepPrevious: false });
   const [busy, setBusy] = useState(null);
@@ -423,7 +425,7 @@ export default function OrderPage({ params }) {
                 isAdmin && st === "completed" && { label: "Redeschide comanda", icon: ArrowCounterClockwise, onClick: () => act({ action: "stage", stage: "invoicing" }, "Comanda a fost redeschisă", "stage") },
                 !["cancelled", "rejected"].includes(st) && (isAdmin || (isMine && ["new", "pending_approval"].includes(st))) && { divider: true },
                 !["cancelled", "rejected"].includes(st) && (isAdmin || (isMine && ["new", "pending_approval"].includes(st))) && { label: "Anulează comanda", icon: X, onClick: cancel, danger: true },
-                isAdmin && { label: "Șterge definitiv", icon: Trash, onClick: remove, danger: true },
+                canDelete && { label: "Șterge definitiv", icon: Trash, onClick: remove, danger: true },
               ]}
             />
           </>
@@ -458,7 +460,7 @@ export default function OrderPage({ params }) {
         <Card className="mb-4 border-warn/40">
           <CardHeader
             title="Modificare propusă, în așteptarea aprobării"
-            description={`${order.pendingEdit.requestedByName || "Un manager"} · ${relativeTime(order.pendingEdit.requestedAt)} · total nou ${money(order.pendingEdit.total)} (acum ${money(order.total)})`}
+            description={`${order.pendingEdit.requestedByName || "Un angajat"} · ${relativeTime(order.pendingEdit.requestedAt)} · total nou ${money(order.pendingEdit.total)} (acum ${money(order.total)})`}
             icon={PencilSimple}
             action={
               isAdmin && (
@@ -484,7 +486,7 @@ export default function OrderPage({ params }) {
             <CardHeader title={`Produse (${order.items.length})`} icon={Receipt} />
             <ItemsTable items={order.items} order={order} />
           </Card>
-          <Payments order={order} isAdmin={isAdmin} onChange={applyResult} />
+          <Payments order={order} canDelete={canDelete} onChange={applyResult} />
           <Card>
             <CardHeader title="Istoric" icon={ClockCounterClockwise} description="Acțiuni și mișcări de stoc" />
             <Timeline history={history} />

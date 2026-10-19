@@ -84,5 +84,5 @@ export const POST = route(
     await logAudit({ action: "products_imported", category: "product", user, details: `Import: ${stats.created} noi, ${stats.updated} actualizate, ${stats.failed} erori` });
     return stats;
   },
-  { auth: "admin" }
+  { perm: "products.manage" }
 );

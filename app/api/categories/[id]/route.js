@@ -14,7 +14,7 @@ export const PATCH = route(
     if (!c) throw notFound("Categoria nu există");
     return c;
   },
-  { auth: "admin" }
+  { perm: "products.manage" }
 );
 
 // Produsele din categorie raman fara categorie (ON DELETE SET NULL)
@@ -24,5 +24,5 @@ export const DELETE = route(
     await db()`delete from categories where id = ${params.id}`;
     return { deleted: true };
   },
-  { auth: "admin" }
+  { perm: ["products.manage", "delete"] }
 );

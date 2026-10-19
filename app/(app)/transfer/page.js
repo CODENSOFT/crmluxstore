@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { apiPost } from "@/lib/client";
+import { useUser, can } from "@/app/_components/user";
 import { useApi, qs, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { num, formatDateTime, relativeTime } from "@/lib/format";
@@ -103,6 +104,7 @@ function TransferFormBody({ open, onClose }) {
 }
 
 function Inner() {
+  const user = useUser();
   const [f, setF] = useQueryState({ page: "1" });
   const [open, setOpen] = useState(false);
   const { data, loading, error, reload } = useApi(`/api/transfers${qs({ q: f.q, warehouse: f.warehouse, page: f.page, limit: 30 })}`);
@@ -126,7 +128,7 @@ function Inner() {
       <PageHeader
         title="Transferuri"
         description="Mutarea mărfii între depozite, magazin și mașina de livrare."
-        actions={<Button variant="primary" icon={Plus} onClick={() => setOpen(true)}>Transfer nou</Button>}
+        actions={can(user, "stock.transfer") && <Button variant="primary" icon={Plus} onClick={() => setOpen(true)}>Transfer nou</Button>}
       />
       <Card className="overflow-hidden">
         <Toolbar>

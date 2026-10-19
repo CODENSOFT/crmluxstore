@@ -15,6 +15,7 @@ import {
 } from "@/app/_components/icons";
 import { Avatar, Kbd, cx, Spinner } from "@/app/_components/ui";
 import { Menu, Popover } from "@/app/_components/overlay";
+import { can } from "@/lib/permissions";
 
 const NAV = [
   { items: [{ href: "/", label: "Panou", icon: SquaresFour }] },
@@ -31,18 +32,18 @@ const NAV = [
     items: [
       { href: "/stoc", label: "Situația stocului", icon: Stack },
       { href: "/receptie", label: "Recepții", icon: TrayArrowDown },
-      { href: "/transfer", label: "Transferuri", icon: ArrowsLeftRight },
-      { href: "/anulare", label: "Casări", icon: TrashSimple },
-      { href: "/inventariere", label: "Inventariere", icon: ClipboardText },
+      { href: "/transfer", label: "Transferuri", icon: ArrowsLeftRight, perm: "stock.transfer" },
+      { href: "/anulare", label: "Casări", icon: TrashSimple, perm: "stock.writeoff" },
+      { href: "/inventariere", label: "Inventariere", icon: ClipboardText, perm: "stock.inventory" },
       { href: "/furnizori", label: "Furnizori", icon: Truck },
-      { href: "/depozite", label: "Depozite", icon: Warehouse },
+      { href: "/depozite", label: "Depozite", icon: Warehouse, admin: true },
     ],
   },
   {
     title: "Echipă",
     items: [
       { href: "/sarcini", label: "Sarcini", icon: CheckSquareOffset, badge: "tasks" },
-      { href: "/rapoarte", label: "Rapoarte", icon: ChartLineUp },
+      { href: "/rapoarte", label: "Rapoarte", icon: ChartLineUp, perm: "reports.view" },
       { href: "/notificari", label: "Notificări", icon: Bell, badge: "unread" },
     ],
   },
@@ -58,10 +59,18 @@ const NAV = [
   },
 ];
 
+// Meniul vizibil pentru utilizator: sectiuni/pagini de admin + pagini care cer un drept anume
+function visibleNav(user) {
+  const admin = user.role === "admin";
+  return NAV.filter((s) => !s.admin || admin)
+    .map((s) => ({ ...s, items: s.items.filter((it) => (!it.admin || admin) && (!it.perm || can(user, it.perm))) }))
+    .filter((s) => s.items.length);
+}
+
 const CREATE = [
   { href: "/comenzi/nou", label: "Comandă nouă", icon: Receipt, hint: "N" },
   { href: "/clienti?nou=1", label: "Client nou", icon: UsersThree },
-  { href: "/produse?nou=1", label: "Produs nou", icon: Package },
+  { href: "/produse?nou=1", label: "Produs nou", icon: Package, perm: "products.manage" },
   { href: "/receptie/nou", label: "Recepție marfă", icon: TrayArrowDown },
   { href: "/sarcini?nou=1", label: "Sarcină nouă", icon: CheckSquareOffset },
 ];
@@ -131,7 +140,7 @@ function Brand({ collapsed }) {
 function Sidebar({ user, collapsed, onToggle, summary, onNavigate, mobile }) {
   const pathname = usePathname();
   const isActive = (href) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"));
-  const sections = NAV.filter((s) => !s.admin || user.role === "admin");
+  const sections = visibleNav(user);
   return (
     <div className="flex h-full flex-col">
       <div className={cx("flex h-14 items-center justify-between gap-2 px-3", collapsed && "justify-center px-2")}>
@@ -339,11 +348,11 @@ function PaletteBody({ open, onClose, user }) {
 
   const groups = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const pages = NAV.filter((s) => !s.admin || user.role === "admin")
+    const pages = visibleNav(user)
       .flatMap((s) => s.items)
       .filter((i) => !t || i.label.toLowerCase().includes(t))
       .map((i) => ({ key: `p${i.href}`, label: i.label, icon: i.icon, href: i.href, meta: "Pagină" }));
-    const actions = CREATE.filter((c) => !t || c.label.toLowerCase().includes(t)).map((c) => ({
+    const actions = CREATE.filter((c) => (!c.perm || can(user, c.perm)) && (!t || c.label.toLowerCase().includes(t))).map((c) => ({
       key: `a${c.href}`,
       label: c.label,
       icon: Plus,
@@ -389,7 +398,7 @@ function PaletteBody({ open, onClose, user }) {
     if (actions.length) out.push({ title: "Acțiuni rapide", items: actions });
     if (pages.length) out.push({ title: "Navigare", items: pages.slice(0, t ? 8 : 6) });
     return out;
-  }, [res, q, user.role]);
+  }, [res, q, user]);
 
   const flat = groups.flatMap((g) => g.items);
   const go = (it) => {
@@ -606,7 +615,7 @@ export default function Shell({ user, children }) {
                   <span className="hidden sm:inline">Nou</span>
                 </button>
               }
-              items={CREATE.map((c) => ({ label: c.label, icon: c.icon, href: c.href, hint: c.hint }))}
+              items={CREATE.filter((c) => !c.perm || can(user, c.perm)).map((c) => ({ label: c.label, icon: c.icon, href: c.href, hint: c.hint }))}
             />
             <NotificationsButton unread={summary?.unread || 0} onChanged={refresh} />
             <Menu

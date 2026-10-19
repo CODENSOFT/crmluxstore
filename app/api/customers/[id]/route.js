@@ -43,7 +43,7 @@ export const PATCH = route(async ({ req, params, user }) => {
   await logAudit({ action: "customer_edited", category: "customer", entity: c, entityName: c.name, user, details: Object.keys(body).join(", ") });
   emit("customer.updated", customerDTO(c));
   return c;
-});
+}, { perm: "customers.manage" });
 
 // Clientii cu comenzi se dezactiveaza (istoricul ramane); ceilalti se sterg
 export const DELETE = route(
@@ -59,7 +59,7 @@ export const DELETE = route(
     await logAudit({ action: "customer_deleted", category: "customer", entityName: c.name, user });
     return { deleted: true };
   },
-  { auth: "admin" }
+  { perm: ["customers.manage", "delete"] }
 );
 
 // Recalculare statistici (buton „Recalculează”)

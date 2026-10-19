@@ -5,7 +5,7 @@ import Link from "next/link";
 import { apiDelete, apiPatch, apiPost } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { money, formatDate, relativeTime, num } from "@/lib/format";
 import { Card, PageHeader, Button, Field, FormSection, Input, NumberInput, Textarea, SearchInput, EmptyState, Badge, Avatar, DetailList, Skeleton, Switch, Stat } from "@/app/_components/ui";
 import { DataTable, Toolbar } from "@/app/_components/table";
@@ -90,9 +90,10 @@ function SupplierFormBody({ open, onClose, supplier, onSaved }) {
 }
 
 function SupplierDetail({ id, onClose, onEdit }) {
+  const user = useUser();
   const { data: s } = useApi(id ? `/api/suppliers/${id}` : null, { keepPrevious: false });
   return (
-    <Drawer open={!!id} onClose={onClose} title={s?.name || "Furnizor"} description={s?.country} headerAction={s && <Button size="sm" icon={PencilSimple} onClick={() => onEdit(s)}>Editează</Button>}>
+    <Drawer open={!!id} onClose={onClose} title={s?.name || "Furnizor"} description={s?.country} headerAction={s && can(user, "suppliers.manage") && <Button size="sm" icon={PencilSimple} onClick={() => onEdit(s)}>Editează</Button>}>
       {!s ? (
         <Skeleton className="h-60" />
       ) : (
@@ -183,8 +184,8 @@ function Inner() {
       align: "right",
       render: (s) => (
         <div className="flex justify-end gap-1" data-stop>
-          <Button size="xs" variant="ghost" icon={PencilSimple} onClick={() => setForm({ open: true, supplier: s })} aria-label="Editează" />
-          {user.role === "admin" && <Button size="xs" variant="danger-ghost" icon={Trash} onClick={() => remove(s)} aria-label="Șterge" />}
+          {can(user, "suppliers.manage") && <Button size="xs" variant="ghost" icon={PencilSimple} onClick={() => setForm({ open: true, supplier: s })} aria-label="Editează" />}
+          {can(user, ["suppliers.manage", "delete"]) && <Button size="xs" variant="danger-ghost" icon={Trash} onClick={() => remove(s)} aria-label="Șterge" />}
         </div>
       ),
     },

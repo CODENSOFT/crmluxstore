@@ -4,7 +4,7 @@ import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useApi, qs } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { money, moneyShort, num, pct, formatDate, ymd } from "@/lib/format";
 import { CHANNELS, segmentLabel, UNIT_LABELS } from "@/lib/constants";
 import { Card, CardHeader, PageHeader, Tabs, Select, Input, Stat, Segmented, Badge, Skeleton, EmptyState, cx } from "@/app/_components/ui";
@@ -251,7 +251,7 @@ function Writeoffs({ params }) {
 
 function Inner() {
   const user = useUser();
-  const isAdmin = user.role === "admin";
+  const isAdmin = can(user, "orders.all") || can(user, "orders.approve");
   const [f, setF] = useQueryState({ tab: "sales", preset: "month", group: "day" });
   const { data: users } = useApi(isAdmin ? "/api/users" : null);
   const range = f.preset === "custom" ? { from: f.from, to: f.to } : presetRange(f.preset) || {};
@@ -263,7 +263,7 @@ function Inner() {
     { key: "customers", label: "Clienți" },
     { key: "debts", label: "Datorii" },
     { key: "stock", label: "Stoc" },
-    ...(isAdmin ? [{ key: "writeoffs", label: "Casări" }] : []),
+    { key: "writeoffs", label: "Casări" },
   ];
 
   return (
@@ -322,7 +322,7 @@ function Inner() {
       {f.tab === "customers" && <Customers params={params} />}
       {f.tab === "debts" && <Debts />}
       {f.tab === "stock" && <StockReport />}
-      {f.tab === "writeoffs" && isAdmin && <Writeoffs params={params} />}
+      {f.tab === "writeoffs" && <Writeoffs params={params} />}
     </div>
   );
 }

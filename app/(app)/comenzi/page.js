@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useApi, qs } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { money, relativeTime, formatDateTime, num } from "@/lib/format";
 import { CHANNELS, channelLabel, PAYMENT_STATUS } from "@/lib/constants";
 import { Card, PageHeader, ButtonLink, Tabs, StageBadge, PaymentBadge, Select, SearchInput, Input, Button, EmptyState, cx } from "@/app/_components/ui";
@@ -25,7 +25,7 @@ const TABS = [
 
 function OrdersInner() {
   const user = useUser();
-  const isAdmin = user.role === "admin";
+  const isAdmin = can(user, "orders.approve") || can(user, "orders.all");
   const [f, setF] = useQueryState({ status: "open", page: "1" });
   const params = {
     status: f.status === "all" ? "" : f.status,

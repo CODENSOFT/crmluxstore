@@ -4,4 +4,4 @@ import { listDocs } from "@/lib/stockDocsQuery";
 
 export const GET = route(async ({ query }) => listDocs("inventory", query));
 
-export const POST = route(async ({ req, user }) => createInventory(await readJson(req), user));
+export const POST = route(async ({ req, user }) => createInventory(await readJson(req), user), { perm: "stock.inventory" });

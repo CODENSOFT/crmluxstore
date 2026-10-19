@@ -3,10 +3,11 @@ import { USER_COLS } from "@/lib/users";
 import { hashPassword } from "@/lib/auth";
 import { route, readJson, badRequest } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
+import { cleanPermissions } from "@/lib/permissions";
 import { SALE_STAGE_KEYS } from "@/lib/orderStages";
 import { startOfMonth } from "@/lib/time";
 
-// Lista utilizatorilor (managerii o folosesc pentru alegerea responsabililor)
+// Lista utilizatorilor (angajatii o folosesc pentru alegerea responsabililor)
 export const GET = route(async ({ user, query }) => {
   const sql = db();
   if (user.role !== "admin" || query.get("stats") !== "1") {
@@ -28,7 +29,7 @@ export const GET = route(async ({ user, query }) => {
 
 export const POST = route(
   async ({ req, user }) => {
-    const { name, email, password, role, phone, position } = await readJson(req);
+    const { name, email, password, role, phone, position, permissions } = await readJson(req);
     if (!name || !email || !password) throw badRequest("Numele, emailul și parola sunt obligatorii");
     if (String(password).length < 6) throw badRequest("Parola trebuie să aibă minim 6 caractere");
     const sql = db();
@@ -40,6 +41,7 @@ export const POST = route(
       email: mail,
       passwordHash: await hashPassword(password),
       role: role === "admin" ? "admin" : "manager",
+      permissions: role === "admin" ? [] : cleanPermissions(permissions),
       phone: phone || null,
       position: position || null,
     })} returning ${sql.unsafe(USER_COLS)}`;

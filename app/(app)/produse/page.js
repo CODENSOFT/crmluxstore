@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApi, qs } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
-import { useUser } from "@/app/_components/user";
+import { useUser, can } from "@/app/_components/user";
 import { money, num, pct } from "@/lib/format";
 import { UNIT_LABELS } from "@/lib/constants";
 import { Card, PageHeader, Button, Select, SearchInput, Badge, EmptyState, Segmented, Dot, cx, Skeleton } from "@/app/_components/ui";
@@ -39,7 +39,7 @@ const marginOf = (p) => {
 function ProductsInner() {
   const router = useRouter();
   const user = useUser();
-  const isAdmin = user.role === "admin";
+  const manage = can(user, "products.manage");
   const [f, setF] = useQueryState({ page: "1", sort: "name", view: "table", active: "1" });
   const [formState, setForm] = useState(false);
   const form = formState || f.nou === "1";
@@ -125,14 +125,16 @@ function ProductsInner() {
             <Menu
               trigger={<Button icon={DotsThree}>Instrumente</Button>}
               items={[
-                isAdmin && { label: "Import din Excel / CSV", icon: UploadSimple, onClick: () => setImporting(true) },
+                manage && { label: "Import din Excel / CSV", icon: UploadSimple, onClick: () => setImporting(true) },
                 { label: "Export în Excel (CSV)", icon: DownloadSimple, download: true, href: `/api/products${qs({ ...params, page: undefined, limit: undefined, format: "csv" })}` },
-                isAdmin && { label: "Gestionare categorii", icon: Tag, onClick: () => setCats(true) },
+                manage && { label: "Gestionare categorii", icon: Tag, onClick: () => setCats(true) },
               ]}
             />
-            <Button variant="primary" icon={Plus} onClick={() => setForm(true)}>
-              Produs nou
-            </Button>
+            {manage && (
+              <Button variant="primary" icon={Plus} onClick={() => setForm(true)}>
+                Produs nou
+              </Button>
+            )}
           </>
         }
       />
@@ -278,14 +280,16 @@ function ProductsInner() {
                 action={
                   !filtered && (
                     <div className="flex gap-2">
-                      {isAdmin && (
+                      {manage && (
                         <Button size="sm" icon={UploadSimple} onClick={() => setImporting(true)}>
                           Import
                         </Button>
                       )}
-                      <Button size="sm" variant="primary" icon={Plus} onClick={() => setForm(true)}>
-                        Produs nou
-                      </Button>
+                      {manage && (
+                        <Button size="sm" variant="primary" icon={Plus} onClick={() => setForm(true)}>
+                          Produs nou
+                        </Button>
+                      )}
                     </div>
                   )
                 }

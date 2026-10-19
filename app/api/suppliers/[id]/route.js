@@ -28,7 +28,7 @@ export const PATCH = route(async ({ req, params, user }) => {
   const fresh = await load(s._id);
   await logAudit({ action: "supplier_edited", category: "supplier", entity: fresh, entityName: fresh.name, user });
   return fresh;
-});
+}, { perm: "suppliers.manage" });
 
 export const DELETE = route(
   async ({ params, user }) => {
@@ -43,5 +43,5 @@ export const DELETE = route(
     await logAudit({ action: "supplier_deleted", category: "supplier", entityName: s.name, user });
     return { deleted: true };
   },
-  { auth: "admin" }
+  { perm: ["suppliers.manage", "delete"] }
 );
