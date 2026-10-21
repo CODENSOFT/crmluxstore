@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiDelete, apiPost } from "@/lib/client";
@@ -14,7 +14,6 @@ import { BarList } from "@/app/_components/charts";
 import {
   Plus, PencilSimple, DotsThree, Phone, EnvelopeSimple, MapPin, Buildings, User, Receipt, Coins, Wallet, Package, CheckSquareOffset, ArrowsClockwise, Trash, Info, Tag,
 } from "@/app/_components/icons";
-import { CustomerForm } from "../_form";
 import { CustomerPrices } from "../_prices";
 
 export default function CustomerPage({ params }) {
@@ -24,7 +23,6 @@ export default function CustomerPage({ params }) {
   const toast = useToast();
   const confirm = useConfirm();
   const { data: c, error, reload, mutate } = useApi(`/api/customers/${id}`, { keepPrevious: false });
-  const [edit, setEdit] = useState(false);
 
   if (error) return <ErrorState error={error} onRetry={reload} />;
   if (!c) return <Skeleton className="h-96" />;
@@ -89,9 +87,9 @@ export default function CustomerPage({ params }) {
               </a>
             )}
             {can(user, "customers.manage") && (
-              <Button icon={PencilSimple} onClick={() => setEdit(true)}>
+              <ButtonLink href={`/clienti/${c._id}/editare`} icon={PencilSimple}>
                 Editează
-              </Button>
+              </ButtonLink>
             )}
             <ButtonLink href={`/comenzi/nou?customer=${c._id}`} variant="primary" icon={Plus}>
               Comandă nouă
@@ -99,7 +97,7 @@ export default function CustomerPage({ params }) {
             <Menu
               trigger={<Button icon={DotsThree} aria-label="Mai multe" />}
               items={[
-                { label: "Sarcină pentru acest client", icon: CheckSquareOffset, href: `/sarcini?nou=1&customer=${c._id}` },
+                { label: "Sarcină pentru acest client", icon: CheckSquareOffset, href: `/sarcini/nou?customer=${c._id}` },
                 { label: "Recalculează statisticile", icon: ArrowsClockwise, onClick: recalc },
                 can(user, ["customers.manage", "delete"]) && { divider: true },
                 can(user, ["customers.manage", "delete"]) && { label: "Șterge / dezactivează", icon: Trash, onClick: remove, danger: true },
@@ -236,7 +234,7 @@ export default function CustomerPage({ params }) {
             <CardHeader
               title="Sarcini"
               icon={CheckSquareOffset}
-              action={<Link href={`/sarcini?nou=1&customer=${c._id}`} className="text-[12.5px] font-medium text-accent hover:underline">Adaugă</Link>}
+              action={<Link href={`/sarcini/nou?customer=${c._id}`} className="text-[12.5px] font-medium text-accent hover:underline">Adaugă</Link>}
             />
             {c.tasks?.length ? (
               <ul className="divide-y divide-line border-t border-line">
@@ -260,7 +258,6 @@ export default function CustomerPage({ params }) {
         </div>
       </div>
 
-      <CustomerForm open={edit} onClose={() => setEdit(false)} customer={c} onSaved={() => reload()} />
     </div>
   );
 }

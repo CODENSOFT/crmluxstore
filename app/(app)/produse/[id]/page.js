@@ -15,7 +15,6 @@ import { Pagination } from "@/app/_components/table";
 import {
   PencilSimple, DotsThree, TrayArrowDown, Stack, Coins, ChartLineUp, Clock, ImageIcon, Warehouse, ClockCounterClockwise, Trash, Prohibit, CheckCircle, Sliders, Package, Globe, Info,
 } from "@/app/_components/icons";
-import { ProductForm } from "../_form";
 import { PublishModal } from "../_publish";
 
 const REF_LINK = {
@@ -97,7 +96,6 @@ export default function ProductPage({ params }) {
   const [page, setPage] = useState(1);
   const { data: p, error, reload, mutate } = useApi(`/api/products/${id}`, { keepPrevious: false });
   const { data: mov, reload: reloadMov } = useApi(`/api/products/${id}/movements?page=${page}&limit=20`);
-  const [edit, setEdit] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [adjust, setAdjust] = useState(false);
 
@@ -152,9 +150,9 @@ export default function ProductPage({ params }) {
               Recepție
             </ButtonLink>
             {manage && (
-              <Button variant="primary" icon={PencilSimple} onClick={() => setEdit(true)}>
+              <ButtonLink href={`/produse/${p._id}/editare`} variant="primary" icon={PencilSimple}>
                 Editează
-              </Button>
+              </ButtonLink>
             )}
             {(manage || isAdmin) && (
             <Menu
@@ -264,7 +262,7 @@ export default function ProductPage({ params }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={/^https?:\/\//.test(p.photo) ? p.photo : `/api/products/${p._id}/photo?v=${new Date(p.updatedAt).getTime()}`} alt={p.name} className="h-full w-full object-contain p-4" />
               ) : manage ? (
-                <button type="button" onClick={() => setEdit(true)} className="flex flex-col items-center gap-2 text-[13px] text-fg-3 hover:text-fg">
+                <button type="button" onClick={() => router.push(`/produse/${p._id}/editare`)} className="flex flex-col items-center gap-2 text-[13px] text-fg-3 hover:text-fg">
                   <ImageIcon size={36} />
                   Adaugă fotografie
                 </button>
@@ -327,7 +325,6 @@ export default function ProductPage({ params }) {
         </div>
       </div>
 
-      <ProductForm open={edit} onClose={() => setEdit(false)} product={p} onSaved={() => reload()} />
       <PublishModal open={publishing} onClose={() => setPublishing(false)} ids={[p._id]} title={p.wooId ? "Actualizare pe site" : "Publicare pe site"} onDone={() => reload()} />
       <AdjustModal
         open={adjust}

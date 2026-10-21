@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiPatch, apiPost } from "@/lib/client";
 import { invalidate, useApi } from "@/lib/useApi";
 import { UNITS, UNIT_NAMES } from "@/lib/constants";
 import { money, pct } from "@/lib/format";
 import { Button, Field, FormSection, Input, NumberInput, Select, Textarea, Switch, IconButton, Badge } from "@/app/_components/ui";
-import { Drawer, useToast } from "@/app/_components/overlay";
+import { useToast } from "@/app/_components/overlay";
+import { FormPage } from "@/app/_components/formpage";
 import { ProductPicker } from "@/app/_components/pickers";
 import { ImageIcon, Trash, UploadSimple, LinkIcon, Tag, Coins, Warehouse, Cube, PlugsConnected } from "@/app/_components/icons";
 
@@ -72,12 +74,12 @@ function initialForm(product) {
   };
 }
 
-export function ProductForm(props) {
-  return props.open ? <ProductFormBody {...props} /> : null;
-}
-
-function ProductFormBody({ open, onClose, product, onSaved }) {
+/** Pagina „Produs nou” / „Editare produs” (product = produsul editat) */
+export function ProductForm({ product }) {
   const toast = useToast();
+  const router = useRouter();
+  const backHref = product ? `/produse/${product._id}` : "/produse";
+  const onClose = () => router.push(backHref);
   const { data: categories } = useApi("/api/categories");
   const { data: warehouses } = useApi("/api/warehouses");
   const { data: all } = useApi("/api/products?light=1");
@@ -92,6 +94,7 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
   const fileRef = useRef(null);
 
   const set = (p) => setF((x) => ({ ...x, ...p }));
+  const missing = [!f.name.trim() && "Denumire", String(f.price).trim() === "" && "Preț cu amănuntul"].filter(Boolean);
   const price = Number(f.price) || 0;
   const cost = Number(f.costPrice) || 0;
   const wholesale = Number(f.wholesalePrice) || 0;
@@ -127,8 +130,7 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
       const res = product ? await apiPatch(`/api/products/${product._id}`, body) : await apiPost("/api/products", body);
       toast(product ? "Produsul a fost actualizat" : `Produsul „${res.name}” a fost adăugat`);
       invalidate("/api/products", "/api/stock", "/api/categories", "/api/search", "/api/dashboard");
-      onSaved?.(res);
-      onClose();
+      router.push(`/produse/${res._id}`);
     } catch (e) {
       toast(e.message, "error");
     } finally {
@@ -137,17 +139,18 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
   }
 
   return (
-    <Drawer
-      open={open}
-      onClose={onClose}
+    <FormPage
+      back={{ href: backHref, label: product ? product.name : "Produse" }}
       title={product ? "Editare produs" : "Produs nou"}
-      description={product ? product.name : "Prețurile se introduc cu TVA inclus, cum apar pe site și în magazin."}
+      description={product ? "Modificați datele și salvați. Stocul se schimbă doar prin recepții, vânzări și inventariere." : "Completați denumirea și prețul — restul e opțional. Prețurile se introduc cu TVA inclus, cum apar pe site și în magazin."}
+      missing={missing}
+      onSubmit={() => !missing.length && !saving && save()}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
             Renunță
           </Button>
-          <Button variant="primary" loading={saving} disabled={!f.name.trim()} onClick={save}>
+          <Button variant="primary" size="lg" loading={saving} disabled={missing.length > 0} onClick={save}>
             {product ? "Salvează" : "Adaugă produsul"}
           </Button>
         </>
@@ -343,6 +346,6 @@ function ProductFormBody({ open, onClose, product, onSaved }) {
           <option key={b} value={b} />
         ))}
       </datalist>
-    </Drawer>
+    </FormPage>
   );
 }

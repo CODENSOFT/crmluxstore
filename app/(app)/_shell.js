@@ -69,10 +69,13 @@ function visibleNav(user) {
 
 const CREATE = [
   { href: "/comenzi/nou", label: "Comandă nouă", icon: Receipt, hint: "N" },
-  { href: "/clienti?nou=1", label: "Client nou", icon: UsersThree },
-  { href: "/produse?nou=1", label: "Produs nou", icon: Package, perm: "products.manage" },
+  { href: "/clienti/nou", label: "Client nou", icon: UsersThree },
+  { href: "/produse/nou", label: "Produs nou", icon: Package, perm: "products.manage" },
   { href: "/receptie/nou", label: "Recepție marfă", icon: TrayArrowDown },
-  { href: "/sarcini?nou=1", label: "Sarcină nouă", icon: CheckSquareOffset },
+  { href: "/sarcini/nou", label: "Sarcină nouă", icon: CheckSquareOffset },
+  { href: "/transfer/nou", label: "Transfer nou", icon: ArrowsLeftRight, perm: "stock.transfer" },
+  { href: "/anulare/nou", label: "Casare nouă", icon: TrashSimple, perm: "stock.writeoff" },
+  { href: "/furnizori/nou", label: "Furnizor nou", icon: Truck },
 ];
 
 /* ---------------- Preferinte locale (tema, meniu restrans) ---------------- */

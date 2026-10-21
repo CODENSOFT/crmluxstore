@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiPatch, apiPost } from "@/lib/client";
 import { invalidate, useApi } from "@/lib/useApi";
 import { useUser, can } from "@/app/_components/user";
 import { CUSTOMER_SEGMENTS, CUSTOMER_SOURCES } from "@/lib/constants";
 import { Button, Field, FormSection, Input, NumberInput, Select, Textarea, Segmented, Alert } from "@/app/_components/ui";
-import { Drawer, useToast } from "@/app/_components/overlay";
+import { useToast } from "@/app/_components/overlay";
+import { FormPage } from "@/app/_components/formpage";
 import { Buildings, User, Warning, Bank, Truck, HandCoins, Note } from "@/app/_components/icons";
 
 const EMPTY = {
@@ -45,13 +47,12 @@ function initial(customer) {
   };
 }
 
-// Formularul se monteaza doar cand e deschis -> starea porneste mereu din datele curente
-export function CustomerForm(props) {
-  return props.open ? <CustomerFormBody {...props} /> : null;
-}
-
-function CustomerFormBody({ open, onClose, customer, onSaved }) {
+/** Pagina „Client nou” / „Editare client” */
+export function CustomerForm({ customer }) {
   const toast = useToast();
+  const router = useRouter();
+  const backHref = customer ? `/clienti/${customer._id}` : "/clienti";
+  const onClose = () => router.push(backHref);
   const user = useUser();
   const { data: users } = useApi(can(user, "customers.manage") ? "/api/users" : null);
   const [f, setF] = useState(() => initial(customer));
@@ -68,28 +69,30 @@ function CustomerFormBody({ open, onClose, customer, onSaved }) {
       const res = customer ? await apiPatch(`/api/customers/${customer._id}`, body) : await apiPost("/api/customers", body);
       toast(customer ? "Datele clientului au fost salvate" : `Clientul „${res.name}” a fost adăugat`);
       invalidate("/api/customers", "/api/search");
-      onSaved?.(res);
-      onClose();
+      router.push(`/clienti/${res._id}`);
     } catch (e) {
-      if (e.status === 409 && e.body?.duplicate) setDup(e.body.duplicate);
-      else toast(e.message, "error");
+      if (e.status === 409 && e.body?.duplicate) {
+        setDup(e.body.duplicate);
+        toast(`Există deja clientul „${e.body.duplicate.name}”`, "error");
+      } else toast(e.message, "error");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Drawer
-      open={open}
-      onClose={onClose}
+    <FormPage
+      back={{ href: backHref, label: customer ? customer.name : "Clienți" }}
       title={customer ? "Editare client" : "Client nou"}
-      description={customer ? customer.number : "Persoanele juridice primesc automat prețuri angro (se poate schimba)."}
+      description={customer ? `${customer.number || ""} · modificați datele și salvați.` : "Doar numele este obligatoriu. Telefonul ajută la găsirea rapidă a clientului și la legarea comenzilor de pe site și din Telegram."}
+      missing={[!f.name.trim() && (company ? "Denumirea companiei" : "Nume și prenume")].filter(Boolean)}
+      onSubmit={() => f.name.trim() && !saving && save(false)}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
             Renunță
           </Button>
-          <Button variant="primary" loading={saving} disabled={!f.name.trim()} onClick={() => save(false)}>
+          <Button variant="primary" size="lg" loading={saving} disabled={!f.name.trim()} onClick={() => save(false)}>
             {customer ? "Salvează" : "Adaugă clientul"}
           </Button>
         </>
@@ -229,6 +232,6 @@ function CustomerFormBody({ open, onClose, customer, onSaved }) {
           </Alert>
         )}
       </div>
-    </Drawer>
+    </FormPage>
   );
 }

@@ -12,6 +12,11 @@ async function load(id, user) {
   return task;
 }
 
+export const GET = route(async ({ params, user }) => {
+  const task = await load(params.id, user);
+  return getTask(task._id);
+});
+
 export const PATCH = route(async ({ req, params, user }) => {
   const b = await readJson(req);
   const task = await load(params.id, user);

@@ -19,6 +19,16 @@ function assertCanManage(actor, target) {
   if (isAdminUser(target)) throw forbidden("Doar administratorul principal poate modifica administratorii");
 }
 
+export const GET = route(
+  async ({ user, params }) => {
+    const target = await load(params.id);
+    assertCanManage(user, target);
+    const [u] = await db()`select ${db().unsafe(USER_COLS)} from users where id = ${target._id}`;
+    return u;
+  },
+  { auth: "admin" }
+);
+
 export const PATCH = route(
   async ({ req, user, params }) => {
     const body = await readJson(req);

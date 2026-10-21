@@ -1,133 +1,18 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import Link from "next/link";
-import { apiDelete, apiPatch, apiPost } from "@/lib/client";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiPatch } from "@/lib/client";
 import { useApi, qs, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { useUser, can } from "@/app/_components/user";
-import { formatDate, relativeTime, ymd } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { TASK_STATUS, TASK_PRIORITY } from "@/lib/constants";
-import { PageHeader, Button, Field, FormSection, Input, Select, Textarea, Segmented, Badge, Avatar, Skeleton, cx } from "@/app/_components/ui";
-import { Drawer, useConfirm, useToast } from "@/app/_components/overlay";
-import { CustomerPicker, SelectedChip } from "@/app/_components/pickers";
-import { Plus, CalendarBlank, Trash, User, Buildings, Receipt, CheckCircle, Circle, Timer, ListChecks, LinkIcon } from "@/app/_components/icons";
+import { PageHeader, ButtonLink, Select, Segmented, Badge, Avatar, Skeleton, cx } from "@/app/_components/ui";
+import { useToast } from "@/app/_components/overlay";
+import { Plus, CalendarBlank, CheckCircle, Circle, Timer } from "@/app/_components/icons";
 
 const COL_ICON = { todo: Circle, in_progress: Timer, done: CheckCircle };
-
-function TaskForm(props) {
-  return props.open ? <TaskFormBody {...props} /> : null;
-}
-
-function TaskFormBody({ open, onClose, task, presetCustomer, onSaved, onDelete }) {
-  const user = useUser();
-  const toast = useToast();
-  const isAdmin = can(user, "tasks.manage");
-  const { data: users } = useApi(isAdmin ? "/api/users" : null);
-  const { data: preset } = useApi(!task && presetCustomer ? `/api/customers/${presetCustomer}` : null);
-  const [f, setF] = useState(() => ({
-    title: task?.title || "",
-    description: task?.description || "",
-    assignedTo: task?.assignedTo?._id || user.id,
-    dueDate: task?.dueDate ? ymd(task.dueDate) : "",
-    priority: task?.priority || "normal",
-    status: task?.status || "todo",
-  }));
-  // undefined = neales inca (se foloseste clientul presetat), null = sters explicit
-  const [chosen, setCustomer] = useState(task?.customer || undefined);
-  const customer = chosen === undefined ? preset || null : chosen;
-  const [busy, setBusy] = useState(false);
-  const set = (p) => setF((x) => ({ ...x, ...p }));
-  const save = async () => {
-    setBusy(true);
-    try {
-      const body = { ...f, dueDate: f.dueDate || null, customer: customer?._id || null };
-      task ? await apiPatch(`/api/tasks/${task._id}`, body) : await apiPost("/api/tasks", body);
-      toast(task ? "Sarcina a fost actualizată" : "Sarcina a fost creată");
-      invalidate("/api/tasks", "/api/me", "/api/dashboard");
-      onSaved();
-      onClose();
-    } catch (e) {
-      toast(e.message, "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const canEdit = !task || isAdmin || String(task.createdBy?._id) === user.id;
-  return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      title={task ? "Sarcină" : "Sarcină nouă"}
-      description={task ? `Creată de ${task.createdBy?.name || "—"} · ${relativeTime(task.createdAt)}` : null}
-      footer={
-        <>
-          {task && canEdit && can(user, "delete") && (
-            <Button variant="danger-ghost" icon={Trash} className="mr-auto" onClick={() => onDelete(task)}>
-              Șterge
-            </Button>
-          )}
-          <Button variant="ghost" onClick={onClose}>Renunță</Button>
-          <Button variant="primary" loading={busy} disabled={!f.title?.trim()} onClick={save}>{task ? "Salvează" : "Creează sarcina"}</Button>
-        </>
-      }
-    >
-      <div className="space-y-8">
-        <FormSection icon={ListChecks} title="Sarcina" description="Ce trebuie făcut, pe scurt, plus detaliile necesare.">
-        <Field label="Ce trebuie făcut" required>
-          <Input autoFocus value={f.title || ""} onChange={(e) => set({ title: e.target.value })} disabled={!canEdit} placeholder="ex: Sunați spălătoria AquaWash pentru comanda de chimie" />
-        </Field>
-        <Field label="Detalii">
-          <Textarea rows={5} value={f.description || ""} onChange={(e) => set({ description: e.target.value })} disabled={!canEdit} />
-        </Field>
-        </FormSection>
-        <FormSection icon={CalendarBlank} title="Planificare" description="Cine se ocupă, până când și cât de urgent este.">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {isAdmin && users && (
-            <Field label="Responsabil">
-              <Select value={f.assignedTo} onChange={(e) => set({ assignedTo: e.target.value })}>
-                {users.filter((u) => u.active).map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
-              </Select>
-            </Field>
-          )}
-          <Field label="Termen">
-            <Input type="date" value={f.dueDate || ""} onChange={(e) => set({ dueDate: e.target.value })} disabled={!canEdit} />
-          </Field>
-          <Field label="Prioritate">
-            <Segmented
-              className="w-full [&>button]:flex-1 [&>button]:justify-center"
-              value={f.priority}
-              onChange={(v) => canEdit && set({ priority: v })}
-              options={TASK_PRIORITY.map((p) => ({ value: p.key, label: p.label }))}
-            />
-          </Field>
-          {task && (
-            <Field label="Status">
-              <Select value={f.status} onChange={(e) => set({ status: e.target.value })}>
-                {TASK_STATUS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-              </Select>
-            </Field>
-          )}
-        </div>
-        </FormSection>
-        <FormSection icon={LinkIcon} title="Legături" description="Opțional — clientul sau comanda la care se referă sarcina.">
-        <Field label="Client">
-          {customer ? (
-            <SelectedChip icon={customer.type === "company" ? Buildings : User} title={customer.name} subtitle={customer.phone} onClear={canEdit ? () => setCustomer(null) : undefined} />
-          ) : (
-            <CustomerPicker onSelect={setCustomer} />
-          )}
-        </Field>
-        {task?.order && (
-          <Link href={`/comenzi/${task.order._id}`} className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent hover:underline">
-            <Receipt size={15} /> Comanda {task.order.number}
-          </Link>
-        )}
-        </FormSection>
-      </div>
-    </Drawer>
-  );
-}
 
 function TaskCard({ t, onOpen, onDragStart, onToggle }) {
   const pr = TASK_PRIORITY.find((p) => p.key === t.priority);
@@ -177,11 +62,13 @@ function TaskCard({ t, onOpen, onDragStart, onToggle }) {
 function Inner() {
   const user = useUser();
   const toast = useToast();
-  const confirm = useConfirm();
   const isAdmin = can(user, "tasks.manage");
   const [f, setF] = useQueryState({ scope: isAdmin ? "all" : "mine" });
-  const [formState, setForm] = useState({ open: false, task: null });
-  const form = f.nou === "1" ? { open: true, task: null, customer: f.customer } : formState;
+  const router = useRouter();
+  // linkuri vechi „?nou=1” -> pagina noua
+  useEffect(() => {
+    if (f.nou === "1") router.replace(`/sarcini/nou${f.customer ? `?customer=${f.customer}` : ""}`);
+  }, [f.nou, f.customer, router]);
   const [dragOver, setDragOver] = useState(null);
   const { data, loading, reload, mutate } = useApi(`/api/tasks${qs({ mine: f.scope === "mine" ? 1 : "", assignedTo: f.assignedTo, hideDone: 1 })}`);
   const { data: users } = useApi(isAdmin ? "/api/users" : null);
@@ -197,16 +84,6 @@ function Inner() {
       reload();
     }
   };
-  const remove = async (t) => {
-    if (!(await confirm({ title: "Ștergeți sarcina?", message: t.title, tone: "danger", confirmLabel: "Șterge" }))) return;
-    try {
-      await apiDelete(`/api/tasks/${t._id}`);
-      setForm({ open: false, task: null });
-      reload();
-    } catch (e) {
-      toast(e.message, "error");
-    }
-  };
 
   const today = new Date(new Date().toDateString());
   const overdue = (data || []).filter((t) => t.status !== "done" && t.dueDate && new Date(t.dueDate) < today).length;
@@ -216,7 +93,7 @@ function Inner() {
       <PageHeader
         title="Sarcini"
         description={overdue ? `${overdue} sarcini au termenul depășit.` : "Ce are de făcut echipa: apeluri, livrări, comenzi către furnizori."}
-        actions={<Button variant="primary" icon={Plus} onClick={() => setForm({ open: true, task: null })}>Sarcină nouă</Button>}
+        actions={<ButtonLink href="/sarcini/nou" variant="primary" icon={Plus}>Sarcină nouă</ButtonLink>}
       />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {isAdmin && (
@@ -266,7 +143,7 @@ function Inner() {
                   <span className="tnum rounded-md bg-surface-3 px-1.5 text-[11.5px] font-semibold text-fg-2">{items.length}</span>
                 </span>
                 {col.key === "todo" && (
-                  <button type="button" onClick={() => setForm({ open: true, task: null })} className="rounded-md p-1 text-fg-3 hover:bg-surface-3 hover:text-fg" aria-label="Sarcină nouă">
+                  <button type="button" onClick={() => router.push("/sarcini/nou")} className="rounded-md p-1 text-fg-3 hover:bg-surface-3 hover:text-fg" aria-label="Sarcină nouă">
                     <Plus size={15} weight="bold" />
                   </button>
                 )}
@@ -277,7 +154,7 @@ function Inner() {
                   <TaskCard
                     key={t._id}
                     t={t}
-                    onOpen={(x) => setForm({ open: true, task: x })}
+                    onOpen={(x) => router.push(`/sarcini/${x._id}`)}
                     onDragStart={(e, x) => e.dataTransfer.setData("text/plain", x._id)}
                     onToggle={(x) => move(x, x.status === "done" ? "todo" : "done")}
                   />
@@ -289,7 +166,6 @@ function Inner() {
         })}
       </div>
 
-      <TaskForm open={form.open} task={form.task} presetCustomer={form.customer} onClose={() => { setForm({ open: false, task: null }); if (f.nou) setF({ nou: "", customer: "" }); }} onSaved={reload} onDelete={remove} />
     </div>
   );
 }

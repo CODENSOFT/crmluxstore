@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApi, qs } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
@@ -9,13 +9,14 @@ import { CUSTOMER_SEGMENTS, segmentLabel } from "@/lib/constants";
 import { Card, PageHeader, Button, Select, SearchInput, Badge, Avatar, EmptyState, Stat, Switch } from "@/app/_components/ui";
 import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
 import { Plus, DownloadSimple, UsersThree, Buildings, Wallet, Coins } from "@/app/_components/icons";
-import { CustomerForm } from "./_form";
 
 function CustomersInner() {
   const router = useRouter();
   const [f, setF] = useQueryState({ page: "1", sort: "-createdAt" });
-  const [formOpenState, setFormOpen] = useState(false);
-  const formOpen = formOpenState || f.nou === "1";
+  // linkuri vechi „?nou=1” -> pagina noua
+  useEffect(() => {
+    if (f.nou === "1") router.replace("/clienti/nou");
+  }, [f.nou, router]);
   const params = { q: f.q, segment: f.segment, type: f.type, debt: f.debt, sort: f.sort, page: f.page, limit: 40 };
   const { data, loading, error, reload } = useApi(`/api/customers${qs(params)}`);
 
@@ -93,7 +94,7 @@ function CustomersInner() {
               <DownloadSimple size={16} weight="bold" />
               <span className="hidden sm:inline">Export Excel</span>
             </a>
-            <Button variant="primary" icon={Plus} onClick={() => setFormOpen(true)}>
+            <Button variant="primary" icon={Plus} onClick={() => router.push("/clienti/nou")}>
               Client nou
             </Button>
           </>
@@ -159,14 +160,13 @@ function CustomersInner() {
               icon={UsersThree}
               title={filtered ? "Niciun client găsit" : "Încă nu aveți clienți"}
               description={filtered ? "Încercați altă căutare." : "Clienții se adaugă manual sau automat, la comenzile de pe site."}
-              action={!filtered && <Button variant="primary" size="sm" icon={Plus} onClick={() => setFormOpen(true)}>Client nou</Button>}
+              action={!filtered && <Button variant="primary" size="sm" icon={Plus} onClick={() => router.push("/clienti/nou")}>Client nou</Button>}
             />
           }
         />
         <Pagination page={Number(f.page) || 1} limit={40} total={data?.total || 0} onChange={(p) => setF({ page: p }, { resetPage: false })} />
       </Card>
 
-      <CustomerForm open={formOpen} onClose={() => { setFormOpen(false); if (f.nou) setF({ nou: "" }); }} onSaved={(c) => router.push(`/clienti/${c._id}`)} />
     </div>
   );
 }

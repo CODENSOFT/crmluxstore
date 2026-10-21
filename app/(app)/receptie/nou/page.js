@@ -18,7 +18,8 @@ function NewArrival() {
   const { data: suppliers } = useApi("/api/suppliers");
   const [whSel, setWarehouse] = useState("");
   const warehouse = whSel || (warehouses?.length ? String((warehouses.find((w) => w.isDefault) || warehouses[0])._id) : "");
-  const [supplierId, setSupplierId] = useState("");
+  // ?supplier=ID (ex: dupa „+ furnizor nou” sau din pagina furnizorului)
+  const [supplierId, setSupplierId] = useState(() => sp.get("supplier") || "");
   const [supplierInvoice, setSupplierInvoice] = useState("");
   const [supplierInvoiceDate, setSupplierInvoiceDate] = useState("");
   const [note, setNote] = useState("");
@@ -72,7 +73,7 @@ function NewArrival() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Furnizor" aside={<ButtonLink href="/furnizori?nou=1" size="xs" variant="link">+ furnizor nou</ButtonLink>}>
+              <Field label="Furnizor" aside={<ButtonLink href="/furnizori/nou?next=/receptie/nou" size="xs" variant="link">+ furnizor nou</ButtonLink>}>
                 <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
                   <option value="">Fără furnizor</option>
                   {(suppliers || []).map((s) => (

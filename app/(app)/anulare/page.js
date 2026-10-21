@@ -1,105 +1,20 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { apiPost } from "@/lib/client";
+import { Suspense } from "react";
 import { useUser, can } from "@/app/_components/user";
-import { useApi, qs, invalidate } from "@/lib/useApi";
+import { useApi, qs } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { money, num, formatDateTime, relativeTime } from "@/lib/format";
 import { WRITEOFF_REASONS, writeoffReasonLabel } from "@/lib/constants";
-import { Card, PageHeader, Button, Select, SearchInput, Field, FormSection, Input, EmptyState, Badge } from "@/app/_components/ui";
+import { Card, PageHeader, ButtonLink, Select, SearchInput, EmptyState, Badge } from "@/app/_components/ui";
 import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
-import { Drawer, useToast } from "@/app/_components/overlay";
-import { Plus, TrashSimple, Package } from "@/app/_components/icons";
-import { DocLinesEditor, linesPayload, linesValid } from "../_stockdoc";
+import { Plus, TrashSimple } from "@/app/_components/icons";
 
 const TONE = { expired: "warn", damaged: "bad", defect: "bad", internal: "info", sample: "violet", lost: "bad", other: "neutral" };
-
-function WriteoffForm(props) {
-  return props.open ? <WriteoffFormBody {...props} /> : null;
-}
-
-function WriteoffFormBody({ open, onClose }) {
-  const toast = useToast();
-  const { data: products } = useApi("/api/products?light=1");
-  const { data: warehouses } = useApi("/api/warehouses");
-  const [whSel, setWarehouse] = useState("");
-  const warehouse = whSel || (warehouses?.length ? String((warehouses.find((w) => w.isDefault) || warehouses[0])._id) : "");
-  const [reasonCode, setReasonCode] = useState("damaged");
-  const [reason, setReason] = useState("");
-  const [lines, setLines] = useState([]);
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const d = await apiPost("/api/writeoffs", { warehouse, reasonCode, reason, items: linesPayload(lines) });
-      toast(`Casarea ${d.number} a fost înregistrată`);
-      invalidate("/api/writeoffs", "/api/products", "/api/stock", "/api/dashboard");
-      onClose();
-    } catch (e) {
-      toast(e.message, "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      title="Casare stoc"
-      description="Scoaterea din stoc a produselor expirate, deteriorate sau folosite intern."
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            Renunță
-          </Button>
-          <Button variant="danger" icon={TrashSimple} loading={saving} disabled={!warehouse || !linesValid(lines, { warehouse, checkStock: true, products })} onClick={save}>
-            Casează produsele
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-8">
-        <FormSection icon={TrashSimple} title="Document" description="Din ce depozit și de ce se scot produsele. Pierderea se calculează la prețul de achiziție.">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Depozit">
-            <Select value={warehouse} onChange={(e) => setWarehouse(e.target.value)}>
-              {(warehouses || []).map((w) => (
-                <option key={w._id} value={w._id}>
-                  {w.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Motiv">
-            <Select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>
-              {WRITEOFF_REASONS.map((r) => (
-                <option key={r.key} value={r.key}>
-                  {r.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Detalii" className="sm:col-span-2">
-            <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="ex: canistră fisurată la descărcare" />
-          </Field>
-        </div>
-        </FormSection>
-        <FormSection icon={Package} title="Produse" description="Căutați sau scanați produsele. Stocul disponibil în depozit se verifică automat.">
-          <div className="overflow-hidden rounded-xl border border-line">
-            <DocLinesEditor lines={lines} setLines={setLines} products={products} warehouse={warehouse} checkStock />
-          </div>
-        </FormSection>
-      </div>
-    </Drawer>
-  );
-}
 
 function Inner() {
   const user = useUser();
   const [f, setF] = useQueryState({ page: "1" });
-  const [open, setOpen] = useState(false);
   const { data, loading, error, reload } = useApi(`/api/writeoffs${qs({ q: f.q, reason: f.reason, warehouse: f.warehouse, page: f.page, limit: 30 })}`);
   const columns = [
     { key: "number", header: "Document", render: (d) => <div><div className="font-medium text-fg">{d.number || "—"}</div><div className="text-[12px] text-fg-3">{formatDateTime(d.createdAt)}</div></div> },
@@ -114,7 +29,7 @@ function Inner() {
       <PageHeader
         title="Casări"
         description="Produse scoase din stoc: expirate, deteriorate, defecte, consum intern sau mostre."
-        actions={can(user, "stock.writeoff") && <Button variant="primary" icon={Plus} onClick={() => setOpen(true)}>Casare nouă</Button>}
+        actions={can(user, "stock.writeoff") && <ButtonLink href="/anulare/nou" variant="primary" icon={Plus}>Casare nouă</ButtonLink>}
       />
       <Card className="overflow-hidden">
         <Toolbar>
@@ -131,7 +46,6 @@ function Inner() {
         <DataTable columns={columns} rows={data?.items} loading={loading} error={error} onRetry={reload} empty={<EmptyState icon={TrashSimple} title="Nicio casare" description="Nu există casări înregistrate." />} />
         <Pagination page={Number(f.page) || 1} limit={30} total={data?.total || 0} onChange={(p) => setF({ page: p }, { resetPage: false })} />
       </Card>
-      <WriteoffForm open={open} onClose={() => { setOpen(false); reload(); }} />
     </div>
   );
 }

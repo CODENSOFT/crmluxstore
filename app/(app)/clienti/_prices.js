@@ -3,6 +3,7 @@
 // Produsele cumparate des de client + pretul individual pentru fiecare.
 // Comenzile acestui client folosesc automat aceste preturi.
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiPut } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
@@ -10,7 +11,8 @@ import { useUser, can } from "@/app/_components/user";
 import { money, num, pct } from "@/lib/format";
 import { UNIT_LABELS } from "@/lib/constants";
 import { Card, CardHeader, Button, ButtonLink, NumberInput, IconButton, Badge, EmptyState, Skeleton, FormSection, cx } from "@/app/_components/ui";
-import { Drawer, useToast } from "@/app/_components/overlay";
+import { useToast } from "@/app/_components/overlay";
+import { FormPage } from "@/app/_components/formpage";
 import { ProductPicker } from "@/app/_components/pickers";
 import { Star, Trash, PencilSimple, Plus, Coins, Info, ArrowUp, ArrowDown } from "@/app/_components/icons";
 
@@ -19,8 +21,7 @@ const standardPrice = (row, priceType) =>
 
 export function CustomerPrices({ customer }) {
   const user = useUser();
-  const { data, loading, reload } = useApi(`/api/customers/${customer._id}/prices`);
-  const [editing, setEditing] = useState(false);
+  const { data, loading } = useApi(`/api/customers/${customer._id}/prices`);
   const manage = can(user, "customers.manage");
   return (
     <Card className="overflow-hidden">
@@ -29,9 +30,9 @@ export function CustomerPrices({ customer }) {
         icon={Star}
         description="Comenzile acestui client folosesc automat prețurile de aici."
         action={manage && (
-          <Button size="sm" icon={data?.length ? PencilSimple : Plus} onClick={() => setEditing(true)}>
+          <ButtonLink href={`/clienti/${customer._id}/preturi`} size="sm" icon={data?.length ? PencilSimple : Plus}>
             {data?.length ? "Modifică" : "Adaugă produse"}
-          </Button>
+          </ButtonLink>
         )}
       />
       {loading && !data ? (
@@ -75,13 +76,15 @@ export function CustomerPrices({ customer }) {
           description={manage ? "Adăugați produsele pe care clientul le cumpără des și stabiliți prețul lui pentru fiecare." : "Administratorul poate stabili prețuri individuale pentru acest client."}
         />
       )}
-      {editing && <PricesEditor customer={customer} rows={data || []} onClose={() => setEditing(false)} onSaved={reload} />}
     </Card>
   );
 }
 
-function PricesEditor({ customer, rows, onClose, onSaved }) {
+/** Pagina „Prețuri individuale” a clientului */
+export function PricesEditor({ customer, rows }) {
   const toast = useToast();
+  const router = useRouter();
+  const onClose = () => router.push(`/clienti/${customer._id}`);
   const { data: products } = useApi("/api/products?light=1");
   const [items, setItems] = useState(() =>
     rows.map((r) => ({ product: r.product, name: r.name, sku: r.sku, unit: r.unit, retailPrice: r.retailPrice, wholesalePrice: r.wholesalePrice, costPrice: r.costPrice, price: String(r.price) }))
@@ -107,7 +110,6 @@ function PricesEditor({ customer, rows, onClose, onSaved }) {
       await apiPut(`/api/customers/${customer._id}/prices`, { items: items.map((x) => ({ product: x.product, price: Number(x.price) })) });
       toast("Prețurile clientului au fost salvate");
       invalidate(`/api/customers/${customer._id}`);
-      onSaved();
       onClose();
     } catch (e) {
       toast(e.message, "error");
@@ -116,15 +118,16 @@ function PricesEditor({ customer, rows, onClose, onSaved }) {
     }
   };
   return (
-    <Drawer
-      open
-      onClose={onClose}
+    <FormPage
+      back={{ href: `/clienti/${customer._id}`, label: customer.name }}
       title={`Prețuri individuale — ${customer.name}`}
       description={customer.priceType === "wholesale" ? "Prețul standard al clientului: angro" : "Prețul standard al clientului: cu amănuntul"}
+      missing={invalid ? ["prețul la toate produsele"] : []}
+      onSubmit={() => !invalid && !busy && save()}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Renunță</Button>
-          <Button variant="primary" loading={busy} disabled={invalid} onClick={save}>Salvează prețurile</Button>
+          <Button variant="primary" size="lg" loading={busy} disabled={invalid} onClick={save}>Salvează prețurile</Button>
         </>
       }
     >
@@ -190,6 +193,6 @@ function PricesEditor({ customer, rows, onClose, onSaved }) {
           </p>
         </FormSection>
       </div>
-    </Drawer>
+    </FormPage>
   );
 }

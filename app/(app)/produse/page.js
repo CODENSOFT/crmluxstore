@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApi, qs, invalidate } from "@/lib/useApi";
@@ -13,7 +13,6 @@ import { Card, PageHeader, Button, Select, SearchInput, Badge, EmptyState, Segme
 import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
 import { Menu } from "@/app/_components/overlay";
 import { Plus, DownloadSimple, UploadSimple, Package, Rows, SquaresFour, ImageIcon, Tag, DotsThree, Globe } from "@/app/_components/icons";
-import { ProductForm } from "./_form";
 import { ImportDrawer, CategoriesModal } from "./_tools";
 
 const STOCK = { in: { tone: "ok", label: "În stoc" }, low: { tone: "warn", label: "Stoc mic" }, out: { tone: "bad", label: "Fără stoc" } };
@@ -44,8 +43,10 @@ function ProductsInner() {
   const { data: publishInfo } = usePublishInfo(manage);
   const [publishing, setPublishing] = useState(false);
   const [f, setF] = useQueryState({ page: "1", sort: "name", view: "table", active: "1" });
-  const [formState, setForm] = useState(false);
-  const form = formState || f.nou === "1";
+  // linkuri vechi „?nou=1” -> pagina noua
+  useEffect(() => {
+    if (f.nou === "1") router.replace("/produse/nou");
+  }, [f.nou, router]);
   const [importing, setImporting] = useState(false);
   const [cats, setCats] = useState(false);
   const params = { q: f.q, category: f.category, brand: f.brand, status: f.status, warehouse: f.warehouse, sort: f.sort, active: f.active, page: f.page, limit: 48 };
@@ -140,7 +141,7 @@ function ProductsInner() {
               </Button>
             )}
             {manage && (
-              <Button variant="primary" icon={Plus} onClick={() => setForm(true)}>
+              <Button variant="primary" icon={Plus} onClick={() => router.push("/produse/nou")}>
                 Produs nou
               </Button>
             )}
@@ -296,7 +297,7 @@ function ProductsInner() {
                         </Button>
                       )}
                       {manage && (
-                        <Button size="sm" variant="primary" icon={Plus} onClick={() => setForm(true)}>
+                        <Button size="sm" variant="primary" icon={Plus} onClick={() => router.push("/produse/nou")}>
                           Produs nou
                         </Button>
                       )}
@@ -310,7 +311,6 @@ function ProductsInner() {
         <Pagination page={Number(f.page) || 1} limit={48} total={data?.total || 0} onChange={(p) => setF({ page: p }, { resetPage: false })} />
       </Card>
 
-      <ProductForm open={form} onClose={() => { setForm(false); if (f.nou) setF({ nou: "" }); }} onSaved={(p) => router.push(`/produse/${p._id}`)} />
       <ImportDrawer open={importing} onClose={() => setImporting(false)} />
       <CategoriesModal open={cats} onClose={() => setCats(false)} />
     </div>
