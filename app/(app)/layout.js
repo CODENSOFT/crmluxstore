@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { ToastProvider, ConfirmProvider } from "@/app/_components/overlay";
 import { UserProvider } from "@/app/_components/user";
 import Shell from "./_shell";
+import { LanguageProvider } from "@/app/_components/i18n";
 
 export default async function AppLayout({ children }) {
   let user;
@@ -25,7 +26,9 @@ export default async function AppLayout({ children }) {
     <ToastProvider>
       <ConfirmProvider>
         <UserProvider user={user}>
-          <Shell user={user}>{children}</Shell>
+          <LanguageProvider lang={user.lang}>
+            <Shell user={user}>{children}</Shell>
+          </LanguageProvider>
         </UserProvider>
       </ConfirmProvider>
     </ToastProvider>

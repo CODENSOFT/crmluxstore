@@ -37,5 +37,5 @@ export const POST = route(
       throw badRequest(e.message);
     }
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );

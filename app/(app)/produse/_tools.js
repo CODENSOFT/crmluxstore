@@ -44,19 +44,32 @@ export function ImportDrawer({ open, onClose }) {
     setResult(null);
   };
 
+  const [reading, setReading] = useState(false);
   const onFile = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (/\.xlsx?$/i.test(file.name)) {
-      toast("Salvați fișierul din Excel ca „CSV UTF-8” și încărcați-l din nou", "error");
-      return;
+    setReading(true);
+    try {
+      // Excel (.xlsx) se citeste pe server; CSV direct in browser
+      let rows;
+      if (/\.csv$|\.txt$/i.test(file.name)) rows = parseCSV(await file.text());
+      else {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/import/sheet", { method: "POST", body: fd });
+        const j = await res.json();
+        if (!j.ok) throw new Error(j.error || "Fișierul nu a putut fi citit");
+        rows = j.data.rows;
+      }
+      setFileName(file.name);
+      setResult(null);
+      setParsed(mapProductRows(rows));
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setReading(false);
     }
-    const text = await file.text();
-    const res = mapProductRows(parseCSV(text));
-    setFileName(file.name);
-    setResult(null);
-    setParsed(res);
   };
 
   const run = async () => {
@@ -107,14 +120,14 @@ export function ImportDrawer({ open, onClose }) {
     >
       <div className="space-y-5">
         <ol className="space-y-1.5 text-[13px] text-fg-2">
-          <li>1. Descărcați modelul sau folosiți propriul tabel cu antete (Denumire, SKU, Preț, Categorie, Depozit, Cantitate…).</li>
-          <li>2. În Excel: Fișier → Salvare ca → „CSV UTF-8 (delimitat prin virgulă)”.</li>
-          <li>3. Încărcați fișierul, verificați previzualizarea, apoi importați.</li>
+          <li>1. Folosiți fișierul Excel așa cum îl aveți (.xlsx) — coloanele se recunosc singure după antet: Denumire, SKU / Cod, Preț, Categorie, Depozit, Cantitate…</li>
+          <li>2. Încărcați fișierul și verificați previzualizarea: ce coloane s-au recunoscut și câte rânduri.</li>
+          <li>3. Apăsați „Importă”. Produsele existente se actualizează, cele noi se creează.</li>
         </ol>
         <div className="flex flex-wrap gap-2">
-          <input ref={fileRef} type="file" accept=".csv,text/csv,.txt" className="hidden" onChange={onFile} />
+          <input ref={fileRef} type="file" accept=".xlsx,.csv,text/csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={onFile} />
           <Button variant="primary" icon={UploadSimple} onClick={() => fileRef.current?.click()}>
-            Alege fișierul CSV
+            {reading ? "Se citește fișierul…" : "Alege fișierul Excel sau CSV"}
           </Button>
           <Button icon={DownloadSimple} onClick={downloadTemplate}>
             Descarcă modelul

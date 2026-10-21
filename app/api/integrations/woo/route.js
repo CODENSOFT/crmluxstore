@@ -5,7 +5,7 @@ import { generateSecret } from "@/lib/apiKeys";
 import { wooView } from "@/lib/wooView";
 import { logAudit } from "@/lib/audit";
 
-export const GET = route(async ({ req }) => wooView(await getSettings({ fresh: true }), req), { auth: "admin" });
+export const GET = route(async ({ req }) => wooView(await getSettings({ fresh: true }), req), { auth: "owner" });
 
 export const PUT = route(
   async ({ req, user }) => {
@@ -33,5 +33,5 @@ export const PUT = route(
     await logAudit({ action: "settings_saved", category: "integration", user, details: "Configurare site WooCommerce" });
     return wooView(next, req);
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );

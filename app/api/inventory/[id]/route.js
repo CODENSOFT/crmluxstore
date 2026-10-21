@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { isAdminUser } from "@/lib/permissions";
 import { route, readJson, badRequest } from "@/lib/api";
 import { getInventory, updateInventory, completeInventory, cancelInventory } from "@/lib/stockDocs";
 
@@ -28,7 +29,7 @@ export const POST = route(async ({ req, params, user }) => {
   const body = await readJson(req);
   await getInventory(params.id);
   if (body.action === "complete") {
-    if (user.role !== "admin") throw badRequest("Doar administratorul poate finaliza inventarierea");
+    if (!isAdminUser(user)) throw badRequest("Doar administratorul poate finaliza inventarierea");
     return completeInventory(params.id, user, body.items ? { items: body.items } : null);
   }
   if (body.action === "cancel") return cancelInventory(params.id);

@@ -1,5 +1,6 @@
 "use client";
 
+import { isAdminUser } from "@/lib/permissions";
 import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -15,6 +16,7 @@ import {
   PencilSimple, DotsThree, TrayArrowDown, Stack, Coins, ChartLineUp, Clock, ImageIcon, Warehouse, ClockCounterClockwise, Trash, Prohibit, CheckCircle, Sliders, Package, Globe, Info,
 } from "@/app/_components/icons";
 import { ProductForm } from "../_form";
+import { PublishModal } from "../_publish";
 
 const REF_LINK = {
   Order: (id) => `/comenzi/${id}`,
@@ -89,13 +91,14 @@ export default function ProductPage({ params }) {
   const user = useUser();
   const toast = useToast();
   const confirm = useConfirm();
-  const isAdmin = user.role === "admin";
+  const isAdmin = isAdminUser(user);
   const manage = can(user, "products.manage");
   const canDelete = can(user, ["products.manage", "delete"]);
   const [page, setPage] = useState(1);
   const { data: p, error, reload, mutate } = useApi(`/api/products/${id}`, { keepPrevious: false });
   const { data: mov, reload: reloadMov } = useApi(`/api/products/${id}/movements?page=${page}&limit=20`);
   const [edit, setEdit] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [adjust, setAdjust] = useState(false);
 
   if (error) return <ErrorState error={error} onRetry={reload} />;
@@ -139,6 +142,7 @@ export default function ProductPage({ params }) {
             {p.name}
             {p.isComposite && <Badge tone="violet">Set</Badge>}
             {p.active === false && <Badge tone="bad">Inactiv</Badge>}
+            {p.wooId ? <Badge tone="ok">Pe site</Badge> : <Badge>Nepublicat pe site</Badge>}
           </span>
         }
         description={[p.sku && `SKU ${p.sku}`, p.barcode && `EAN ${p.barcode}`, p.category?.name, p.brand, p.packaging].filter(Boolean).join(" · ") || "Fără cod"}
@@ -156,6 +160,7 @@ export default function ProductPage({ params }) {
             <Menu
               trigger={<Button icon={DotsThree} aria-label="Mai multe" />}
               items={[
+                manage && { label: p.wooId ? "Actualizează pe site" : "Publică pe site", icon: Globe, onClick: () => setPublishing(true) },
                 isAdmin && { label: "Corecție manuală de stoc", icon: Sliders, onClick: () => setAdjust(true) },
                 manage && { label: p.active === false ? "Activează produsul" : "Dezactivează produsul", icon: p.active === false ? CheckCircle : Prohibit, onClick: toggleActive },
                 canDelete && { divider: true },
@@ -323,6 +328,7 @@ export default function ProductPage({ params }) {
       </div>
 
       <ProductForm open={edit} onClose={() => setEdit(false)} product={p} onSaved={() => reload()} />
+      <PublishModal open={publishing} onClose={() => setPublishing(false)} ids={[p._id]} title={p.wooId ? "Actualizare pe site" : "Publicare pe site"} onDone={() => reload()} />
       <AdjustModal
         open={adjust}
         onClose={() => setAdjust(false)}

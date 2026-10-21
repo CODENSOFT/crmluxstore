@@ -1,15 +1,17 @@
 "use client";
 
+import { isAdminUser } from "@/lib/permissions";
 import { Suspense, useState } from "react";
 import { apiPatch, apiPut } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { useUser } from "@/app/_components/user";
 import { roleLabel } from "@/lib/constants";
-import { Card, CardHeader, PageHeader, Tabs, Field, Input, NumberInput, PasswordInput, Select, Textarea, Switch, Button, Skeleton, IconButton, Avatar } from "@/app/_components/ui";
+import { Card, CardHeader, PageHeader, Tabs, Field, Input, NumberInput, PasswordInput, Select, Textarea, Switch, Button, Skeleton, IconButton, Avatar, cx } from "@/app/_components/ui";
 import { useToast } from "@/app/_components/overlay";
-import { Buildings, Receipt, Truck, Stack, UserCircle, Lock, Plus, Trash, FloppyDisk, ShieldCheck, CheckCircle } from "@/app/_components/icons";
+import { Buildings, Receipt, Truck, Stack, UserCircle, Lock, Plus, Trash, FloppyDisk, ShieldCheck, CheckCircle, Globe } from "@/app/_components/icons";
 import { PERMISSIONS } from "@/lib/permissions";
+import { LANGS } from "@/lib/i18n/runtime";
 
 function SaveBar({ busy, onSave, dirty }) {
   return (
@@ -189,15 +191,56 @@ function ProfileForm({ me, mutate }) {
           <Field label="Repetați parola nouă"><PasswordInput value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} autoComplete="new-password" /></Field>
         </div>
       </Section>
+      <LanguagePicker />
       <MyRights />
     </div>
+  );
+}
+
+// Limba interfetei pentru utilizatorul curent (se aplica imediat, la reincarcare)
+function LanguagePicker() {
+  const user = useUser();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const change = async (lang) => {
+    if (lang === (user.lang || "ro")) return;
+    setBusy(true);
+    try {
+      await apiPatch("/api/profile", { lang });
+      toast(lang === "ru" ? "Язык изменён" : "Limba a fost schimbată");
+      window.location.reload();
+    } catch (e) {
+      toast(e.message, "error");
+      setBusy(false);
+    }
+  };
+  return (
+    <Section title="Limba interfeței" description="Interfața CRM se afișează în limba aleasă. Documentele tipărite rămân în română." icon={Globe}>
+      <div className="flex flex-wrap gap-2" data-no-translate>
+        {LANGS.map((l) => (
+          <button
+            key={l.key}
+            type="button"
+            disabled={busy}
+            onClick={() => change(l.key)}
+            className={cx(
+              "flex min-w-[150px] items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors disabled:opacity-60",
+              (user.lang || "ro") === l.key ? "border-accent bg-accent-soft/60 ring-1 ring-accent" : "border-line hover:border-line-strong hover:bg-surface-2"
+            )}
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-[12px] font-semibold text-fg-2">{l.short}</span>
+            <span className="text-[14px] font-medium text-fg">{l.label}</span>
+          </button>
+        ))}
+      </div>
+    </Section>
   );
 }
 
 // Ce poate face utilizatorul curent (angajatii isi vad drepturile primite de la administrator)
 function MyRights() {
   const user = useUser();
-  if (user.role === "admin") return null;
+  if (isAdminUser(user)) return null;
   const extra = PERMISSIONS.filter((p) => user.permissions?.includes(p.key));
   return (
     <Section title="Drepturile mele" description="Drepturile suplimentare se acordă de administrator, din Utilizatori." icon={ShieldCheck}>
@@ -222,7 +265,7 @@ function MyRights() {
 
 function Inner() {
   const user = useUser();
-  const isAdmin = user.role === "admin";
+  const isAdmin = user.role === "owner";
   const [q, setQ] = useQueryState({ tab: isAdmin ? "companie" : "profil" });
   const { data: s, mutate } = useApi(isAdmin ? "/api/settings" : null);
   const tabs = isAdmin

@@ -3,15 +3,16 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useApi, qs } from "@/lib/useApi";
+import { useApi, qs, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { useUser, can } from "@/app/_components/user";
+import { PublishModal, usePublishInfo } from "./_publish";
 import { money, num, pct } from "@/lib/format";
 import { UNIT_LABELS } from "@/lib/constants";
 import { Card, PageHeader, Button, Select, SearchInput, Badge, EmptyState, Segmented, Dot, cx, Skeleton } from "@/app/_components/ui";
 import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
 import { Menu } from "@/app/_components/overlay";
-import { Plus, DownloadSimple, UploadSimple, Package, Rows, SquaresFour, ImageIcon, Tag, DotsThree } from "@/app/_components/icons";
+import { Plus, DownloadSimple, UploadSimple, Package, Rows, SquaresFour, ImageIcon, Tag, DotsThree, Globe } from "@/app/_components/icons";
 import { ProductForm } from "./_form";
 import { ImportDrawer, CategoriesModal } from "./_tools";
 
@@ -40,6 +41,8 @@ function ProductsInner() {
   const router = useRouter();
   const user = useUser();
   const manage = can(user, "products.manage");
+  const { data: publishInfo } = usePublishInfo(manage);
+  const [publishing, setPublishing] = useState(false);
   const [f, setF] = useQueryState({ page: "1", sort: "name", view: "table", active: "1" });
   const [formState, setForm] = useState(false);
   const form = formState || f.nou === "1";
@@ -130,6 +133,12 @@ function ProductsInner() {
                 manage && { label: "Gestionare categorii", icon: Tag, onClick: () => setCats(true) },
               ]}
             />
+            {manage && publishInfo?.configured && publishInfo.pending > 0 && (
+              <Button icon={Globe} onClick={() => setPublishing(true)}>
+                Publică pe site
+                <Badge tone="accent" className="ml-1">{publishInfo.pending}</Badge>
+              </Button>
+            )}
             {manage && (
               <Button variant="primary" icon={Plus} onClick={() => setForm(true)}>
                 Produs nou
@@ -138,6 +147,7 @@ function ProductsInner() {
           </>
         }
       />
+      <PublishModal open={publishing} onClose={() => setPublishing(false)} title="Publicare produse noi pe site" onDone={() => invalidate("/api/products/publish")} />
 
       <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {[{ _id: "", name: "Toate", productCount: null }, ...(categories || [])].map((c) => {

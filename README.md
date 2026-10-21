@@ -22,8 +22,13 @@ Construit cu **Next.js 16 (App Router) + Postgres (Supabase) + Tailwind CSS 4**,
 | **Furnizori / Depozite** | Contacte, condiții, istoric recepții; depozite (depozit, magazin, mașină), depozit implicit, stoc publicat pe site |
 | **Sarcini** | Tablou Kanban cu drag & drop, termene, priorități, legate de clienți / comenzi, notificări |
 | **Rapoarte** | Vânzări (zi / săptămână / lună, categorii, canale, manageri, metode de plată), produse (clasificare ABC, stoc fără mișcare), clienți, datorii (cu restanțe), stoc, casări — export Excel |
-| **Integrări** | Site luxstore.md (WooCommerce), chei API, API v1 pentru 1C, webhook-uri de ieșire semnate, jurnal de sincronizare |
+| **Integrări** | Site luxstore.md (WooCommerce), bot Telegram pentru clienți, chei API, API v1 pentru 1C, webhook-uri de ieșire semnate, jurnal de sincronizare |
+| **Bot Telegram** | Catalog pe categorii cu foto, descriere, preț și stoc; coș; verifică stocul (dacă clientul cere mai mult, îi propune cantitatea disponibilă); telefon + livrare / ridicare; comanda intră în CRM cu sursa „Bot Telegram”; clientul primește statusul; română și rusă |
+| **Prețuri individuale** | Pe fiecare client: produsele cumpărate des, cu prețul lui; comenzile clientului (și botul) folosesc automat aceste prețuri |
+| **Limbă** | Interfața în română (implicit) sau rusă — fiecare utilizator alege din profil; documentele tipărite rămân în română. Texte noi: `node scripts/i18n-extract.mjs` arată ce lipsește din `lib/i18n/ru/` |
 | **Administrare** | Utilizatori și drepturi (administrator / angajat + drepturi suplimentare pe persoană), istoric activitate, setări companie / TVA / livrare / stoc |
+
+Import de produse din **Excel (.xlsx)** sau CSV, cu recunoașterea automată a coloanelor; publicarea produselor noi pe site se face **manual**, din butonul „Publică pe site” (nimic automat).
 
 Extra: căutare globală **Ctrl/⌘ + K**, tasta **N** = comandă nouă, temă luminoasă / întunecată, interfață adaptată pentru telefon.
 
@@ -31,7 +36,8 @@ Extra: căutare globală **Ctrl/⌘ + K**, tasta **N** = comandă nouă, temă l
 
 ## Roluri și drepturi
 
-- **Administrator** — acces complet.
+- **Administrator principal** (unul singur) — tot, plus: creează / modifică administratorii, Setări și Integrări.
+- **Administrator** — acces complet la lucru (comenzi, stoc, catalog, ștergere, angajați).
 - **Angajat** — munca de zi cu zi, **fără nicio ștergere**: comenzile proprii și cele noi de pe site, comenzi noi (cu aprobare, dacă e activată), plăți, sarcinile proprii, vizualizare produse și stoc, recepții de marfă, clienți și furnizori noi.
 - **Drepturi suplimentare** (bifate de administrator în *Utilizatori*, cu seturi rapide „Vânzări”, „Depozit”, „Șef vânzări”): vede toate comenzile · aprobă comenzi · produse și prețuri · editare clienți / furnizori · transferuri · casări · inventariere · sarcinile echipei · rapoarte · ștergere. Se aplică imediat; definite în `lib/permissions.js`.
 
@@ -77,6 +83,9 @@ CRM → **Integrări → Site luxstore.md**: adresa site-ului + cheile REST API 
 - Comenzile de pe site intră instant (webhook semnat HMAC) ca „Nouă de pe site”, cu clientul găsit / creat după telefon sau email.
 - Opțional: stocul se publică pe site la fiecare mișcare; statusul comenzii (finalizată / anulată) se actualizează pe site.
 - Plasă de siguranță: sincronizare zilnică automată (Vercel Cron) + buton „Sincronizează comenzile”.
+
+### Bot Telegram
+CRM → **Integrări → Bot Telegram**: creați botul la @BotFather, lipiți tokenul, alegeți depozitul din care se vinde → **Conectează botul**. Comenzile apar în CRM ca „Nouă” cu sursa „Bot Telegram”.
 
 ### 1C
 API REST v1 la `/api/v1`, cu chei create din **Integrări → API și chei** (tip 1C).

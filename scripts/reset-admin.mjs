@@ -22,12 +22,12 @@ try {
   const passwordHash = await bcrypt.hash(PASS, 10);
   // Gaseste adminul: intai dupa emailul de baza, altfel cel mai vechi admin
   let [admin] = await sql`select id from users where email = ${EMAIL}`;
-  if (!admin) [admin] = await sql`select id from users where role = 'admin' order by created_at limit 1`;
+  if (!admin) [admin] = await sql`select id from users where role in ('owner', 'admin') order by role = 'owner' desc, created_at limit 1`;
   if (!admin) {
-    await sql`insert into users (name, email, password_hash, role, active) values (${NAME}, ${EMAIL}, ${passwordHash}, 'admin', true)`;
+    await sql`insert into users (name, email, password_hash, role, active) values (${NAME}, ${EMAIL}, ${passwordHash}, 'owner', true)`;
     console.log(`Cont admin creat: ${EMAIL}`);
   } else {
-    await sql`update users set name = ${NAME}, email = ${EMAIL}, password_hash = ${passwordHash}, role = 'admin', active = true where id = ${admin.id}`;
+    await sql`update users set name = ${NAME}, email = ${EMAIL}, password_hash = ${passwordHash}, role = (case when exists (select 1 from users where role = 'owner' and id <> ${admin.id}) then 'admin' else 'owner' end), active = true where id = ${admin.id}`;
     console.log(`Cont admin resetat: ${EMAIL}`);
   }
   console.log("GATA — schimbați parola după autentificare (Profil).");

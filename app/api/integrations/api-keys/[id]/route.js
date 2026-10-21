@@ -19,7 +19,7 @@ export const PATCH = route(
     if (b.active === false) await logAudit({ action: "apikey_revoked", category: "integration", entityName: doc.name, user });
     return doc;
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );
 
 export const DELETE = route(
@@ -28,5 +28,5 @@ export const DELETE = route(
     if (k) await logAudit({ action: "apikey_revoked", category: "integration", entityName: k.name, user, details: "Ștearsă" });
     return { deleted: true };
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );

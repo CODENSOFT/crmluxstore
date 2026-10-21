@@ -12,7 +12,10 @@ const nextConfig = {
   poweredByHeader: false,
   // Adrese vechi -> noi (linkuri salvate de echipa)
   async redirects() {
-    return [{ source: "/integrare", destination: "/integrari", permanent: true }];
+    return [
+      { source: "/integrare", destination: "/integrari", permanent: true },
+      { source: "/istoric", destination: "/", permanent: false },
+    ];
   },
 };
 

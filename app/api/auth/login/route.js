@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { verifyPassword, setSession } from "@/lib/auth";
+import { verifyPassword, setSession, setLangCookie } from "@/lib/auth";
 import { route, readJson, fail } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 
@@ -31,6 +31,7 @@ export const POST = route(
     attempts.delete(key);
     await db()`update users set last_login_at = now() where id = ${user._id}`;
     await setSession({ id: user._id, name: user.name, email: user.email, role: user.role });
+    await setLangCookie(user.lang);
     await logAudit({ action: "login", category: "user", entity: user, entityName: user.name, user: { id: user._id, name: user.name, role: user.role } });
     return safeUser(user);
   },

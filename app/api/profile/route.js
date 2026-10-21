@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { USER_COLS } from "@/lib/users";
-import { hashPassword, verifyPassword, setSession } from "@/lib/auth";
+import { hashPassword, verifyPassword, setSession, setLangCookie } from "@/lib/auth";
 import { route, readJson, badRequest, notFound } from "@/lib/api";
 
 export const GET = route(async ({ user }) => {
@@ -21,6 +21,7 @@ export const PATCH = route(async ({ req, user }) => {
     patch.name = String(body.name).trim();
   }
   if (body.phone != null) patch.phone = body.phone || null;
+  if (body.lang != null) patch.lang = body.lang === "ru" ? "ru" : "ro";
   if (body.email != null) {
     const email = String(body.email).toLowerCase().trim();
     if (email !== me.email) {
@@ -37,5 +38,6 @@ export const PATCH = route(async ({ req, user }) => {
   if (Object.keys(patch).length) await sql`update users set ${sql(patch, ...Object.keys(patch))} where id = ${me._id}`;
   const [fresh] = await sql`select ${sql.unsafe(USER_COLS)} from users where id = ${me._id}`;
   await setSession({ id: fresh._id, name: fresh.name, email: fresh.email, role: fresh.role });
+  if (patch.lang) await setLangCookie(patch.lang);
   return fresh;
 });

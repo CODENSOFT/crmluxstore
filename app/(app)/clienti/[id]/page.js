@@ -15,6 +15,7 @@ import {
   Plus, PencilSimple, DotsThree, Phone, EnvelopeSimple, MapPin, Buildings, User, Receipt, Coins, Wallet, Package, CheckSquareOffset, ArrowsClockwise, Trash, Info, Tag,
 } from "@/app/_components/icons";
 import { CustomerForm } from "../_form";
+import { CustomerPrices } from "../_prices";
 
 export default function CustomerPage({ params }) {
   const { id } = use(params);
@@ -117,6 +118,7 @@ export default function CustomerPage({ params }) {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
+          <CustomerPrices customer={c} />
           <Card className="overflow-hidden">
             <CardHeader title="Comenzi" icon={Receipt} description="Ultimele 100" />
             {c.orders?.length ? (

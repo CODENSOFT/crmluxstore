@@ -12,7 +12,7 @@ import {
 } from "@/app/_components/ui";
 import { Modal, useToast } from "@/app/_components/overlay";
 import { CustomerPicker, ProductPicker, SelectedChip, stockIn } from "@/app/_components/pickers";
-import { Buildings, User, Trash, Package, Warning, Barcode, UserCircle, Truck, Wallet, Note, Plus } from "@/app/_components/icons";
+import { Buildings, User, Trash, Package, Warning, Barcode, UserCircle, Truck, Wallet, Note, Plus, Star, Check } from "@/app/_components/icons";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 let keySeq = 0;
@@ -182,6 +182,9 @@ export default function OrderEditor({ order, template }) {
   const productById = useMemo(() => new Map((products || []).map((p) => [String(p._id), p])), [products]);
   const priceType = customer?.priceType || "retail";
   const custDiscount = Number(customer?.discount) || 0;
+  // Preturile individuale ale clientului (produsele lui preferate)
+  const { data: custPrices } = useApi(!walkIn && customer?._id ? `/api/customers/${customer._id}/prices` : null);
+  const special = useMemo(() => new Map((custPrices || []).map((r) => [String(r.product), r.price])), [custPrices]);
   const allowPriceEdit = isAdmin || !!settings?.requireApproval;
 
   // Depozitul implicit (pana cand utilizatorul alege altul)
@@ -214,11 +217,13 @@ export default function OrderEditor({ order, template }) {
 
   const rows = lines.map((l) => {
     const p = productById.get(l.productId) || l.fallback;
-    const base = defaultPrice(p, priceType);
+    const own = special.get(l.productId);
+    const base = own ?? defaultPrice(p, priceType);
     const price = allowPriceEdit && l.unitPrice !== "" ? Number(l.unitPrice) || 0 : base;
     const qty = Number(l.quantity) || 0;
-    const disc = Math.min(100, Math.max(0, Number(l.discount) || 0));
-    return { ...l, p, base, price, qty, disc, total: r2(qty * price * (1 - disc / 100)) };
+    // pretul individual este pretul final: fara reducerea generala a clientului (daca nu a fost pusa manual)
+    const disc = own != null && !l.discountTouched ? 0 : Math.min(100, Math.max(0, Number(l.discount) || 0));
+    return { ...l, p, base, price, qty, disc, special: own != null, total: r2(qty * price * (1 - disc / 100)) };
   });
 
   // Necesar total pe produs+depozit vs disponibil
@@ -411,6 +416,35 @@ export default function OrderEditor({ order, template }) {
               <p className="mt-1.5 flex items-center gap-1 text-[12px] text-fg-4">
                 <Barcode size={14} /> Scanerul de coduri de bare funcționează direct în câmpul de căutare.
               </p>
+              {custPrices?.length > 0 && (
+                <div className="mt-3 rounded-xl border border-accent/25 bg-accent-soft/40 p-3">
+                  <div className="mb-2 flex items-center gap-1.5 text-[12.5px] font-medium text-fg">
+                    <Star size={14} weight="fill" className="text-accent" /> Produsele clientului — un clic adaugă produsul cu prețul lui
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {custPrices.map((r) => {
+                      const p = productById.get(String(r.product));
+                      const added = rows.some((x) => x.productId === String(r.product));
+                      return (
+                        <button
+                          key={r.product}
+                          type="button"
+                          disabled={!p}
+                          onClick={() => p && addProduct(p)}
+                          className={cx(
+                            "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12.5px] transition-colors disabled:opacity-50",
+                            added ? "border-accent bg-surface text-accent" : "border-line bg-surface text-fg-2 hover:border-accent hover:text-fg"
+                          )}
+                        >
+                          {added ? <Check size={13} weight="bold" /> : <Plus size={13} weight="bold" />}
+                          <span className="max-w-[220px] truncate">{r.name}</span>
+                          <span className="tnum font-semibold text-fg">{money(r.price)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {rows.length === 0 ? (
@@ -444,6 +478,7 @@ export default function OrderEditor({ order, template }) {
                             </div>
                             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-fg-3">
                               {r.p?.sku && <span>{r.p.sku}</span>}
+                              {r.special && <Badge tone="accent">preț client</Badge>}
                               {warehouses?.length > 1 && (
                                 <select
                                   value={r.warehouse}

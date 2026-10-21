@@ -7,13 +7,13 @@ import { useQueryState } from "@/lib/useQueryState";
 import { formatDateTime, relativeTime, num } from "@/lib/format";
 import { WEBHOOK_EVENTS } from "@/lib/constants";
 import {
-  Card, CardHeader, PageHeader, Tabs, Button, Field, Input, PasswordInput, Select, Switch, Badge, Alert, EmptyState, Skeleton, Checkbox, Segmented, cx, Dot, FormSection,
+  Card, CardHeader, PageHeader, Tabs, Button, Field, Input, PasswordInput, Select, Switch, Badge, Alert, EmptyState, Skeleton, Checkbox, Segmented, cx, Dot, FormSection, Textarea,
 } from "@/app/_components/ui";
 import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
 import { Modal, Drawer, Menu, useConfirm, useToast } from "@/app/_components/overlay";
 import {
   Globe, Key, WebhooksLogo, Database, Copy, Check, ArrowsClockwise, PaperPlaneTilt, Plus, Trash, DotsThree, CheckCircle, WarningCircle, DownloadSimple, BookOpen,
-  Lightning, ShieldCheck, ArrowRight, Info, Code, ListChecks, Prohibit, } from "@/app/_components/icons";
+  Lightning, ShieldCheck, ArrowRight, Info, Code, ListChecks, Prohibit, TelegramLogo, Warehouse, ArrowSquareOut, } from "@/app/_components/icons";
 
 function CopyField({ label, value, secret, hint }) {
   const [copied, setCopied] = useState(false);
@@ -58,6 +58,14 @@ function Overview({ go }) {
       text: "Comenzile de pe site intră automat în CRM; stocul și statusurile se pot publica înapoi pe site.",
       status: <StatusPill ok={o.woo.enabled && o.woo.configured} okText="Conectat" badText={o.woo.configured ? "Dezactivat" : "Neconfigurat"} />,
       meta: `${num(o.woo.siteOrders)} comenzi importate · ${num(o.woo.linkedProducts)} produse legate${o.woo.lastOrderSyncAt ? ` · sincronizat ${relativeTime(o.woo.lastOrderSyncAt)}` : ""}`,
+    },
+    {
+      key: "telegram",
+      icon: TelegramLogo,
+      title: "Bot Telegram pentru clienți",
+      text: "Clienții aleg produse pe categorii, văd foto, preț și stoc, și plasează comenzi care intră direct în CRM.",
+      status: <StatusPill ok={o.telegram.enabled} okText={o.telegram.botUsername ? `@${o.telegram.botUsername}` : "Conectat"} badText="Neconectat" />,
+      meta: `${num(o.telegram.orders)} comenzi din bot · ${num(o.telegram.chats)} clienți au scris botului`,
     },
     {
       key: "1c",
@@ -113,6 +121,132 @@ function Overview({ go }) {
             </div>
           </Card>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/* ================= Bot Telegram ================= */
+function TelegramTab() {
+  const { data: cfg, mutate } = useApi("/api/integrations/telegram");
+  if (!cfg) return <Skeleton className="h-96" />;
+  return <TelegramConfig key={cfg.connectedAt || "new"} cfg={cfg} mutate={mutate} />;
+}
+
+function TelegramConfig({ cfg, mutate }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const { data: warehouses } = useApi("/api/warehouses");
+  const [token, setToken] = useState(cfg.token || "");
+  const [warehouse, setWarehouse] = useState(cfg.warehouse || "");
+  const [contactText, setContactText] = useState(cfg.contactText || "");
+  const [busy, setBusy] = useState(null);
+  const save = async (action) => {
+    setBusy(action || "save");
+    try {
+      const res = await apiPut("/api/integrations/telegram", { token, warehouse: warehouse || null, contactText, action });
+      mutate(res);
+      setToken(res.token);
+      invalidate("/api/integrations");
+      toast(action === "connect" ? `Botul @${res.botUsername} este conectat` : action === "disconnect" ? "Botul a fost deconectat" : "Setările botului au fost salvate");
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+  const disconnect = async () => {
+    if (!(await confirm({ title: "Deconectați botul?", message: "Clienții nu vor mai putea plasa comenzi prin Telegram până la reconectare.", tone: "danger", confirmLabel: "Deconectează" }))) return;
+    save("disconnect");
+  };
+  const steps = [
+    <>Deschideți în Telegram <b>@BotFather</b> și trimiteți comanda <code className="rounded bg-surface-2 px-1">/newbot</code>.</>,
+    <>Alegeți un nume (ex: <i>Lux Store</i>) și un username care se termină cu <i>bot</i> (ex: <i>luxstore_md_bot</i>).</>,
+    <>Copiați <b>tokenul</b> primit (arată ca <code className="rounded bg-surface-2 px-1">123456789:AAF…</code>) și lipiți-l mai jos.</>,
+    <>Apăsați <b>Conectează botul</b>. Gata — trimiteți linkul botului clienților.</>,
+  ];
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <Card>
+        <CardHeader title="Bot Telegram pentru comenzi" icon={TelegramLogo} description="Catalogul, prețurile și stocul vin direct din CRM. Comenzile apar în Comenzi cu sursa „Bot Telegram”." />
+        <div className="space-y-8 px-5 pb-6">
+          <FormSection icon={Key} title="1. Tokenul botului" description="Se obține gratuit de la @BotFather, în 1 minut.">
+            <ol className="space-y-2 text-[13px] text-fg-2">
+              {steps.map((s, i) => (
+                <li key={i} className="flex gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11.5px] font-semibold text-accent">{i + 1}</span>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ol>
+            <Field label="Token" hint={cfg.hasToken ? "Salvat — introduceți altul doar dacă îl schimbați" : "Se păstrează secret, doar în CRM"}>
+              <PasswordInput value={token} onChange={(e) => setToken(e.target.value)} placeholder="123456789:AA…" autoComplete="off" />
+            </Field>
+          </FormSection>
+          <FormSection icon={Warehouse} title="2. Stocul afișat" description="Botul arată și verifică stocul din acest depozit; comenzile se scad tot din el.">
+            <Field label="Depozit pentru bot">
+              <Select value={warehouse} onChange={(e) => setWarehouse(e.target.value)}>
+                <option value="">Depozitul implicit</option>
+                {(warehouses || []).map((w) => <option key={w._id} value={w._id}>{w.name}</option>)}
+              </Select>
+            </Field>
+          </FormSection>
+          <FormSection icon={Info} title="3. Text la „Contacte”" description="Opțional: program, adresă, cum se face livrarea. Telefonul și adresa magazinului se iau din Setări.">
+            <Textarea rows={3} value={contactText} onChange={(e) => setContactText(e.target.value)} placeholder="Luni–Sâmbătă 9:00–19:00 · Livrare în Chișinău în 24h" />
+          </FormSection>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
+            {cfg.enabled && <Button variant="danger-ghost" icon={Prohibit} loading={busy === "disconnect"} onClick={disconnect} className="mr-auto">Deconectează</Button>}
+            <Button loading={busy === "save"} onClick={() => save()}>Salvează</Button>
+            <Button variant="primary" icon={TelegramLogo} loading={busy === "connect"} disabled={!token} onClick={() => save("connect")}>
+              {cfg.enabled ? "Reconectează botul" : "Conectează botul"}
+            </Button>
+          </div>
+        </div>
+      </Card>
+      <div className="space-y-4">
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <span className={cx("flex h-11 w-11 items-center justify-center rounded-2xl", cfg.enabled ? "bg-ok-soft text-ok" : "bg-surface-2 text-fg-3")}>
+              <TelegramLogo size={22} weight="fill" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-[15px] font-semibold text-fg">{cfg.enabled ? cfg.botName || "Bot conectat" : "Botul nu este conectat"}</div>
+              <div className="text-[12.5px] text-fg-3">{cfg.enabled && cfg.botUsername ? `@${cfg.botUsername}` : "Completați tokenul și apăsați Conectează"}</div>
+            </div>
+          </div>
+          {cfg.enabled && cfg.botUsername && (
+            <div className="mt-4 space-y-2">
+              <CopyField label="Link pentru clienți" value={`https://t.me/${cfg.botUsername}`} />
+              <a href={`https://t.me/${cfg.botUsername}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent hover:underline">
+                Deschide botul <ArrowSquareOut size={14} />
+              </a>
+            </div>
+          )}
+          <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4 text-center">
+            {[["Clienți", cfg.stats.chats], ["Comenzi", cfg.stats.orders], ["30 zile", cfg.stats.orders30]].map(([l, v]) => (
+              <div key={l}>
+                <div className="tnum text-[18px] font-semibold text-fg">{num(v)}</div>
+                <div className="text-[11.5px] text-fg-3">{l}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card className="p-5 text-[13px] text-fg-2">
+          <div className="mb-2 font-semibold text-fg">Ce face botul</div>
+          <ul className="space-y-1.5">
+            {[
+              "Catalog pe categorii, fișa produsului cu foto, descriere, preț și stoc",
+              "Verifică stocul: dacă clientul cere mai mult, îi propune cantitatea disponibilă",
+              "Coș, telefon (un buton), livrare sau ridicare, adresă",
+              "Comanda apare în CRM ca „Nouă” cu sursa „Bot Telegram” și anunță echipa",
+              "Clientul primește mesaj la fiecare schimbare de status",
+              "Română și rusă — clientul alege limba",
+              "Clienții cu prețuri individuale văd automat prețul lor",
+            ].map((t) => (
+              <li key={t} className="flex gap-2"><CheckCircle size={15} weight="fill" className="mt-0.5 shrink-0 text-ok" />{t}</li>
+            ))}
+          </ul>
+        </Card>
       </div>
     </div>
   );
@@ -615,7 +749,7 @@ X-Lux-Signature: sha256=<HMAC-SHA256(secret, corpul cererii)>
 function LogTab() {
   const [f, setF] = useQueryState({ tab: "log", page: "1" });
   const { data, loading, reload } = useApi(`/api/integrations/logs${qs({ source: f.source, status: f.status, page: f.page, limit: 50 })}`);
-  const SRC = { woo: "Site", "1c": "1C", api: "API", cron: "Automat", webhook: "Webhook" };
+  const SRC = { woo: "Site", telegram: "Telegram", "1c": "1C", api: "API", cron: "Automat", webhook: "Webhook" };
   const columns = [
     { key: "date", header: "Când", render: (l) => <span className="whitespace-nowrap text-[12.5px] text-fg-3">{formatDateTime(l.createdAt)}</span> },
     { key: "src", header: "Sursă", render: (l) => <Badge tone={l.source === "woo" ? "accent" : l.source === "1c" ? "violet" : "neutral"}>{SRC[l.source] || l.source}</Badge> },
@@ -657,6 +791,7 @@ function Inner() {
         tabs={[
           { key: "overview", label: "Prezentare" },
           { key: "site", label: "Site luxstore.md" },
+          { key: "telegram", label: "Bot Telegram" },
           { key: "1c", label: "1C" },
           { key: "api", label: "API și chei" },
           { key: "webhooks", label: "Webhook-uri" },
@@ -665,6 +800,7 @@ function Inner() {
       />
       {f.tab === "overview" && <Overview go={go} />}
       {f.tab === "site" && <SiteTab />}
+      {f.tab === "telegram" && <TelegramTab />}
       {f.tab === "1c" && <OneCTab go={go} />}
       {f.tab === "api" && <KeysTab />}
       {f.tab === "webhooks" && <HooksTab />}

@@ -1,5 +1,6 @@
 "use client";
 
+import { isAdminUser } from "@/lib/permissions";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useApi } from "@/lib/useApi";
@@ -56,7 +57,7 @@ export default function Dashboard() {
   const delta =
     d && d.prevMonth.revenue > 0 ? ((d.month.revenue - d.prevMonth.revenue) / d.prevMonth.revenue) * 100 : null;
   const marginPct = d && d.month.items > 0 ? (d.month.profit / d.month.items) * 100 : 0;
-  const isAdmin = user.role === "admin";
+  const isAdmin = isAdminUser(user);
   const approver = can(user, "orders.approve");
   const reports = can(user, "reports.view");
   const firstName = user.name.split(" ")[0];

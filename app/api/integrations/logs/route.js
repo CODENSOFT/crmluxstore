@@ -13,5 +13,5 @@ export const GET = route(
       order by created_at desc limit ${limit} offset ${skip}`;
     return { items: rows.map(({ fullCount, ...r }) => r), total: rows[0]?.fullCount || 0, page, limit };
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );

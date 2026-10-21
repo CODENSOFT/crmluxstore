@@ -14,7 +14,7 @@ export const GET = route(
     }
     return sql`select * from webhooks order by created_at desc`;
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );
 
 export const POST = route(
@@ -33,5 +33,5 @@ export const POST = route(
     await logAudit({ action: "webhook_saved", category: "integration", entityName: hook.name, user, details: hook.url });
     return hook;
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );

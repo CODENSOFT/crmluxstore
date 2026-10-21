@@ -125,4 +125,5 @@ export {
   Medal,
   ShoppingBag,
   Bank,
+  TelegramLogo,
 } from "@phosphor-icons/react";

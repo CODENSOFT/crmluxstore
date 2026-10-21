@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { can } from "@/lib/permissions";
+import { can, isAdminUser, isOwner } from "@/lib/permissions";
 
 const UserCtx = createContext(null);
 
@@ -19,5 +19,5 @@ export function useCan() {
   return (perm) => can(user, perm);
 }
 
-export const isAdmin = (u) => u?.role === "admin";
-export { can };
+export const isAdmin = (u) => isAdminUser(u);
+export { can, isOwner };

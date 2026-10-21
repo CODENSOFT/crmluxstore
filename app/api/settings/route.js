@@ -7,7 +7,7 @@ const COMPANY = ["companyName", "legalName", "idno", "vatCode", "iban", "bank", 
 
 
 function publicView(s) {
-  const { woo, ...rest } = s;
+  const { woo, telegram, ...rest } = s;
   return rest;
 }
 
@@ -52,5 +52,5 @@ export const PUT = route(
     await logAudit({ action: "settings_saved", category: "settings", user, details: Object.keys(body).join(", ") });
     return publicView(s);
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );

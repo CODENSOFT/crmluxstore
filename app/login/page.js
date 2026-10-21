@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiPost } from "@/lib/client";
 import { Button, Field, Input, PasswordInput } from "@/app/_components/ui";
@@ -74,6 +74,31 @@ function LoginForm() {
   );
 }
 
+// Limba paginii de autentificare (se pastreaza intr-un cookie pe acest dispozitiv)
+function saveLang(l) {
+  document.cookie = `lux-lang=${l}; path=/; max-age=31536000; samesite=lax`;
+  window.location.reload();
+}
+const noop = () => () => {};
+function LangSwitch() {
+  const cur = useSyncExternalStore(noop, () => (document.documentElement.lang === "ru" ? "ru" : "ro"), () => "ro");
+  const set = saveLang;
+  return (
+    <div className="absolute right-4 top-4 flex rounded-lg border border-line bg-surface p-0.5 text-[12.5px] font-medium" data-no-translate>
+      {[["ro", "RO"], ["ru", "RU"]].map(([k, l]) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => set(k)}
+          className={k === cur ? "rounded-md bg-accent px-2.5 py-1 text-white" : "rounded-md px-2.5 py-1 text-fg-3 hover:text-fg"}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function LoginPage() {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
@@ -122,7 +147,8 @@ export default function LoginPage() {
         <div className="relative mt-12 text-[12px] text-white/45">Chișinău, str. Lunca Bîcului 23 · luxstore.md</div>
       </section>
 
-      <section className="flex items-center justify-center bg-bg px-5 py-10">
+      <section className="relative flex items-center justify-center bg-bg px-5 py-10">
+        <LangSwitch />
         <div className="w-full max-w-[380px]">
           <div className="mb-8 flex items-center gap-2.5 lg:hidden">
             <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-accent text-white">

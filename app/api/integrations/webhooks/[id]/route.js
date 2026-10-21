@@ -34,7 +34,7 @@ export const PATCH = route(
     await logAudit({ action: "webhook_saved", category: "integration", entityName: fresh.name, user });
     return fresh;
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );
 
 export const DELETE = route(
@@ -42,7 +42,7 @@ export const DELETE = route(
     if (isUuid(params.id)) await db()`delete from webhooks where id = ${params.id}`;
     return { deleted: true };
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );
 
 // Trimite un eveniment de test („ping”)
@@ -58,5 +58,5 @@ export const POST = route(
     });
     return deliver(h, "ping", body, id);
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );

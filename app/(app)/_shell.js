@@ -10,12 +10,12 @@ import { roleLabel } from "@/lib/constants";
 import { stageInfo } from "@/lib/orderStages";
 import {
   SquaresFour, Receipt, UsersThree, Package, Stack, TrayArrowDown, ArrowsLeftRight, TrashSimple, ClipboardText,
-  Truck, Warehouse, CheckSquareOffset, ChartLineUp, Bell, UserGear, PlugsConnected, ClockCounterClockwise, GearSix,
+  Truck, Warehouse, CheckSquareOffset, ChartLineUp, Bell, UserGear, PlugsConnected, GearSix,
   MagnifyingGlass, Plus, List, SidebarSimple, SignOut, Moon, Sun, Desktop, UserCircle, X, Drop, CaretRight, Buildings, User, Warning,
 } from "@/app/_components/icons";
 import { Avatar, Kbd, cx, Spinner } from "@/app/_components/ui";
 import { Menu, Popover } from "@/app/_components/overlay";
-import { can } from "@/lib/permissions";
+import { can, isAdminUser } from "@/lib/permissions";
 
 const NAV = [
   { items: [{ href: "/", label: "Panou", icon: SquaresFour }] },
@@ -52,18 +52,18 @@ const NAV = [
     admin: true,
     items: [
       { href: "/utilizatori", label: "Utilizatori", icon: UserGear },
-      { href: "/integrari", label: "Integrări", icon: PlugsConnected },
-      { href: "/istoric", label: "Istoric activitate", icon: ClockCounterClockwise },
-      { href: "/setari", label: "Setări", icon: GearSix },
+      { href: "/integrari", label: "Integrări", icon: PlugsConnected, owner: true },
+      { href: "/setari", label: "Setări", icon: GearSix, owner: true },
     ],
   },
 ];
 
 // Meniul vizibil pentru utilizator: sectiuni/pagini de admin + pagini care cer un drept anume
 function visibleNav(user) {
-  const admin = user.role === "admin";
+  const admin = isAdminUser(user);
+  const owner = user.role === "owner";
   return NAV.filter((s) => !s.admin || admin)
-    .map((s) => ({ ...s, items: s.items.filter((it) => (!it.admin || admin) && (!it.perm || can(user, it.perm))) }))
+    .map((s) => ({ ...s, items: s.items.filter((it) => (!it.admin || admin) && (!it.owner || owner) && (!it.perm || can(user, it.perm))) }))
     .filter((s) => s.items.length);
 }
 

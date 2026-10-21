@@ -20,7 +20,9 @@ export const GET = route(
         (select count(*)::int from products where coalesce(external_id, '') <> '') as products_mapped,
         (select count(*)::int from products) as products_total,
         (select count(*)::int from customers where coalesce(external_id, '') <> '') as customers_mapped,
-        (select count(*)::int from customers) as customers_total`,
+        (select count(*)::int from customers) as customers_total,
+        (select count(*)::int from orders where channel = 'telegram') as telegram_orders,
+        (select count(*)::int from telegram_chats) as telegram_chats`,
       sql`select * from integration_logs where source = '1c' order by created_at desc limit 1`,
     ]);
     const key1c = keys.filter((k) => k.kind === "1c");
@@ -34,6 +36,7 @@ export const GET = route(
         lastOrderSyncAt: s.woo?.lastOrderSyncAt || null,
       },
       api: { activeKeys: keys.length, webhooks: c.hooks },
+      telegram: { enabled: !!s.telegram?.enabled, botUsername: s.telegram?.botUsername || "", orders: c.telegramOrders, chats: c.telegramChats },
       onec: {
         keys: key1c.length,
         lastUsedAt: key1c.reduce((m, k) => (k.lastUsedAt && (!m || k.lastUsedAt > m) ? k.lastUsedAt : m), null),
@@ -46,5 +49,5 @@ export const GET = route(
       },
     };
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );

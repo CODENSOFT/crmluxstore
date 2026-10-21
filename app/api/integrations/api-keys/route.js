@@ -12,7 +12,7 @@ export const GET = route(
     const sql = db();
     return sql`select ${KEY_COLS(sql)} from api_keys k order by k.created_at desc`;
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );
 
 // Cheia completa se afiseaza O SINGURA DATA, la creare
@@ -35,5 +35,5 @@ export const POST = route(
     await logAudit({ action: "apikey_created", category: "integration", entityName: doc.name, user });
     return { ...doc, key: k.raw };
   },
-  { auth: "admin" }
+  { auth: "owner" }
 );

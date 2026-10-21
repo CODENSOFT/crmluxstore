@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { apiDelete, apiPatch, apiPost } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
-import { useUser } from "@/app/_components/user";
+import { useUser, isOwner } from "@/app/_components/user";
 import { moneyShort, relativeTime, formatDateTime } from "@/lib/format";
 import { roleLabel } from "@/lib/constants";
-import { Card, PageHeader, Button, Field, FormSection, Input, PasswordInput, Checkbox, Badge, Avatar, EmptyState, cx } from "@/app/_components/ui";
+import { Card, PageHeader, Button, Field, FormSection, Input, PasswordInput, Checkbox, Badge, Avatar, EmptyState, Select, cx } from "@/app/_components/ui";
 import { DataTable } from "@/app/_components/table";
 import { Drawer, Menu, useConfirm, useToast } from "@/app/_components/overlay";
 import { Plus, UserGear, DotsThree, PencilSimple, Trash, Prohibit, CheckCircle, Key, ShieldCheck, UserCircle } from "@/app/_components/icons";
@@ -37,6 +37,8 @@ const GROUPS = [...new Set(PERMISSIONS.map((p) => p.group))];
 
 function UserFormBody({ open, onClose, u, onSaved }) {
   const toast = useToast();
+  const me = useUser();
+  const owner = isOwner(me);
   const [f, setF] = useState(() => ({
     name: u?.name || "",
     email: u?.email || "",
@@ -45,6 +47,7 @@ function UserFormBody({ open, onClose, u, onSaved }) {
     role: u?.role || "manager",
     password: "",
     permissions: u?.permissions || [],
+    lang: u?.lang || "ro",
   }));
   const [busy, setBusy] = useState(false);
   const set = (p) => setF((x) => ({ ...x, ...p }));
@@ -66,7 +69,16 @@ function UserFormBody({ open, onClose, u, onSaved }) {
       setBusy(false);
     }
   };
-  const employee = f.role !== "admin";
+  const employee = f.role === "manager";
+  // Rolul se alege doar de administratorul principal; contul principal are rol fix
+  const roleOptions = u?.role === "owner"
+    ? [{ key: "owner", title: "Administrator principal", text: "Acces complet + gestionează administratorii, setările și integrările. Rolul nu se poate schimba." }]
+    : u?.role === "admin" && !owner
+    ? [{ key: "admin", title: "Administrator", text: "Rolul administratorilor se schimbă doar de administratorul principal." }]
+    : [
+        { key: "manager", title: "Angajat", text: "Munca de zi cu zi: comenzile și sarcinile proprii, recepții. Nu poate șterge nimic." },
+        ...(owner ? [{ key: "admin", title: "Administrator", text: "Acces complet la lucru: aprobări, ștergere, catalog, stoc, angajați." }] : []),
+      ];
   return (
     <Drawer
       open={open}
@@ -89,18 +101,21 @@ function UserFormBody({ open, onClose, u, onSaved }) {
             <Field label="Email (login)" required><Input type="email" value={f.email} onChange={(e) => set({ email: e.target.value })} /></Field>
             <Field label="Telefon"><Input value={f.phone} onChange={(e) => set({ phone: e.target.value })} inputMode="tel" /></Field>
             <Field label="Funcție"><Input value={f.position} onChange={(e) => set({ position: e.target.value })} placeholder="ex: Vânzări B2B, Depozit" /></Field>
+            <Field label="Limba interfeței">
+              <Select value={f.lang} onChange={(e) => set({ lang: e.target.value })} data-no-translate>
+                <option value="ro">Română</option>
+                <option value="ru">Русский</option>
+              </Select>
+            </Field>
             <Field label={u ? "Parolă nouă" : "Parolă"} required={!u} hint={u ? "Lăsați gol pentru a păstra parola actuală" : "Minim 6 caractere"} className="sm:col-span-2">
               <PasswordInput value={f.password} onChange={(e) => set({ password: e.target.value })} autoComplete="new-password" />
             </Field>
           </div>
         </FormSection>
 
-        <FormSection icon={ShieldCheck} title="Rol" description="Administratorul are acces complet. Angajatul lucrează doar cu ce îi este permis.">
+        <FormSection icon={ShieldCheck} title="Rol" description={owner ? "Administratorul are acces complet. Angajatul lucrează doar cu ce îi este permis." : "Administratorii pot fi creați doar de administratorul principal."}>
           <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { key: "manager", title: "Angajat", text: "Munca de zi cu zi: comenzile și sarcinile proprii, recepții. Nu poate șterge nimic." },
-              { key: "admin", title: "Administrator", text: "Acces complet: aprobări, ștergere, setări, integrări, utilizatori." },
-            ].map((r) => (
+            {roleOptions.map((r) => (
               <button
                 key={r.key}
                 type="button"
@@ -111,7 +126,7 @@ function UserFormBody({ open, onClose, u, onSaved }) {
                 )}
               >
                 <div className="flex items-center gap-2 text-[14px] font-semibold text-fg">
-                  {r.key === "admin" ? <ShieldCheck size={17} weight="duotone" className="text-accent" /> : <UserCircle size={17} weight="duotone" className="text-accent" />}
+                  {r.key !== "manager" ? <ShieldCheck size={17} weight="duotone" className="text-accent" /> : <UserCircle size={17} weight="duotone" className="text-accent" />}
                   {r.title}
                 </div>
                 <p className="mt-1.5 text-[12.5px] leading-relaxed text-fg-3">{r.text}</p>
@@ -220,15 +235,15 @@ export default function UsersPage() {
         </div>
       ),
     },
-    { key: "role", header: "Rol", render: (u) => <Badge tone={u.role === "admin" ? "violet" : "neutral"}>{roleLabel(u.role)}</Badge> },
+    { key: "role", header: "Rol", render: (u) => <Badge tone={u.role === "owner" ? "accent" : u.role === "admin" ? "violet" : "neutral"}>{roleLabel(u.role)}</Badge> },
     {
       key: "perms",
       header: "Drepturi",
       className: "hidden md:table-cell",
       headClassName: "hidden md:table-cell",
       render: (u) =>
-        u.role === "admin" ? (
-          <span className="text-[12.5px] text-fg-3">Acces complet</span>
+        u.role !== "manager" ? (
+          <span className="text-[12.5px] text-fg-3">{u.role === "owner" ? "Acces complet + administratori, setări" : "Acces complet"}</span>
         ) : u.permissions?.length ? (
           <span className="text-[12.5px] text-fg-2" title={u.permissions.map(permissionLabel).join(", ")}>
             De bază + {u.permissions.length} {u.permissions.length === 1 ? "drept" : "drepturi"}
@@ -246,18 +261,20 @@ export default function UsersPage() {
       header: "",
       align: "right",
       render: (u) => (
+        (isOwner(me) || u.role === "manager" || String(u._id) === me.id) && (
         <div data-stop>
           <Menu
             trigger={<Button size="xs" variant="ghost" icon={DotsThree} aria-label="Acțiuni" />}
             items={[
               { label: "Editează și drepturi", icon: PencilSimple, onClick: () => setForm({ open: true, u }) },
               { label: "Schimbă parola", icon: Key, onClick: () => setForm({ open: true, u }) },
-              String(u._id) !== me.id && { label: u.active ? "Dezactivează accesul" : "Reactivează accesul", icon: u.active ? Prohibit : CheckCircle, onClick: () => toggleActive(u) },
-              String(u._id) !== me.id && { divider: true },
-              String(u._id) !== me.id && { label: "Șterge contul", icon: Trash, danger: true, onClick: () => remove(u) },
+              String(u._id) !== me.id && u.role !== "owner" && { label: u.active ? "Dezactivează accesul" : "Reactivează accesul", icon: u.active ? Prohibit : CheckCircle, onClick: () => toggleActive(u) },
+              String(u._id) !== me.id && u.role !== "owner" && { divider: true },
+              String(u._id) !== me.id && u.role !== "owner" && { label: "Șterge contul", icon: Trash, danger: true, onClick: () => remove(u) },
             ]}
           />
         </div>
+        )
       ),
     },
   ];
@@ -266,7 +283,7 @@ export default function UsersPage() {
     <div className="animate-in">
       <PageHeader title="Utilizatori" description="Echipa Lux Store: conturi, roluri și drepturile fiecărui angajat." actions={<Button variant="primary" icon={Plus} onClick={() => setForm({ open: true, u: null })}>Utilizator nou</Button>} />
       <Card className="overflow-hidden">
-        <DataTable columns={columns} rows={data} loading={loading} onRowClick={(u) => setForm({ open: true, u })} empty={<EmptyState icon={UserGear} title="Niciun utilizator" />} />
+        <DataTable columns={columns} rows={data} loading={loading} onRowClick={(u) => (isOwner(me) || u.role === "manager" || String(u._id) === me.id) && setForm({ open: true, u })} empty={<EmptyState icon={UserGear} title="Niciun utilizator" />} />
       </Card>
       <UserForm open={form.open} u={form.u} onClose={() => setForm({ open: false, u: null })} onSaved={reload} />
     </div>

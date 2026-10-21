@@ -1,5 +1,6 @@
 "use client";
 
+import { isAdminUser } from "@/lib/permissions";
 import { use, useEffect, useMemo, useState } from "react";
 import { apiPatch, apiPost } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
@@ -132,7 +133,7 @@ function InventoryView({ inv, reload }) {
                 <Button icon={FloppyDisk} loading={busy === "save"} disabled={!dirty} onClick={save}>
                   Salvează
                 </Button>
-                {user.role === "admin" && (
+                {isAdminUser(user) && (
                   <Button variant="primary" icon={Check} loading={busy === "complete"} disabled={!countedN} onClick={complete}>
                     Finalizează
                   </Button>
@@ -150,7 +151,7 @@ function InventoryView({ inv, reload }) {
         <Stat label="Diferență valorică" icon={ClipboardText} value={money(draft ? valueDiff : inv.summary?.valueDiff)} sub="la preț de achiziție" />
       </div>
 
-      {draft && user.role !== "admin" && (
+      {draft && !isAdminUser(user) && (
         <Alert className="no-print mb-4" tone="info" icon={Warning}>
           Introduceți cantitățile numărate și salvați. Finalizarea (corectarea stocului) o face administratorul.
         </Alert>

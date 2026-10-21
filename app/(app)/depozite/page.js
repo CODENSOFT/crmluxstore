@@ -1,5 +1,6 @@
 "use client";
 
+import { isAdminUser } from "@/lib/permissions";
 import { useState } from "react";
 import Link from "next/link";
 import { apiDelete, apiPatch, apiPost } from "@/lib/client";
@@ -73,7 +74,7 @@ export default function WarehousesPage() {
   const user = useUser();
   const toast = useToast();
   const confirm = useConfirm();
-  const isAdmin = user.role === "admin";
+  const isAdmin = isAdminUser(user);
   const { data, reload } = useApi("/api/warehouses?stats=1&all=1");
   const [form, setForm] = useState({ open: false, wh: null });
 
