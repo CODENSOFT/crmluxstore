@@ -417,7 +417,69 @@ const ENDPOINTS = [
   ["PATCH", "/orders/{id}", "Status, nr. factură fiscală, AWB"],
   ["POST", "/arrivals", "Recepții (intrări de marfă) din 1C"],
   ["GET", "/movements?since=", "Registrul de stoc (pentru reconciliere)"],
+  ["GET", "/changes?after={cursor}", "Tot ce s-a schimbat în CRM după ultimul schimb (produse, clienți, comenzi, stoc, documente)"],
+  ["POST", "/changes/ack", "1C confirmă cursorul procesat"],
+  ["POST", "/customers/{id}/prices", "Prețuri individuale ale clientului (din 1C)"],
+  ["POST", "/transfers", "Transferuri între depozite din 1C"],
+  ["POST", "/writeoffs", "Casări din 1C"],
+  ["GET", "/inventory", "Inventarieri finalizate în CRM"],
 ];
+
+const ENTITY_LABELS = {
+  product: "Produse",
+  category: "Categorii",
+  warehouse: "Depozite",
+  customer: "Clienți (și prețurile lor)",
+  supplier: "Furnizori",
+  order: "Comenzi și plăți",
+  stock: "Stocuri",
+  arrival: "Recepții",
+  transfer: "Transferuri",
+  writeoff: "Casări",
+  inventory: "Inventarieri",
+};
+
+function SyncStatusCard() {
+  const { data: st } = useApi("/api/integrations/1c", { refreshInterval: 30000 });
+  if (!st) return <Skeleton className="h-40" />;
+  const pending = Object.entries(st.pending || {});
+  return (
+    <Card>
+      <CardHeader title="Schimbul de date cu 1C" icon={ArrowsClockwise} description="CRM înregistrează automat fiecare modificare. 1C le preia periodic și confirmă ce a procesat." />
+      <div className="space-y-4 px-5 pb-5">
+        {st.keys.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-line px-4 py-5 text-center text-[13px] text-fg-3">Încă nu există o cheie de tip 1C. Creați-o în „API și chei”.</p>
+        ) : (
+          st.keys.map((k) => (
+            <div key={k.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-surface-2/60 px-4 py-3 text-[13px]">
+              <span className="font-medium text-fg">{k.name}</span>
+              <Badge tone={k.behind === 0 ? "ok" : k.ackAt ? "warn" : "neutral"} dot>
+                {k.ackAt ? (k.behind === 0 ? "Sincronizat" : "În urmă") : "Încă nu a preluat"}
+              </Badge>
+              <span className="text-fg-3">{k.ackAt ? `Ultima confirmare: ${relativeTime(k.ackAt)}` : k.lastUsedAt ? `Ultima cerere: ${relativeTime(k.lastUsedAt)}` : "Nicio cerere încă"}</span>
+              <span className="ml-auto font-mono text-[12px] text-fg-4">cursor {num(k.ackCursor)} / {num(st.cursor)}</span>
+            </div>
+          ))
+        )}
+        <div>
+          <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-fg-4">Modificări care așteaptă preluarea în 1C</div>
+          {pending.length ? (
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {pending.map(([e, n]) => (
+                <div key={e} className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-[13px]">
+                  <span className="text-fg-2">{ENTITY_LABELS[e] || e}</span>
+                  <span className="tnum font-semibold text-fg">{num(n)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-fg-3">Nimic în așteptare — 1C are toate datele.</p>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function OneCTab({ go }) {
   const { data: o } = useApi("/api/integrations/overview");
@@ -427,11 +489,12 @@ function OneCTab({ go }) {
     { done: !!o.onec.lastUsedAt, title: "Programatorul 1C testează conexiunea", text: o.onec.lastUsedAt ? `Ultima cerere: ${relativeTime(o.onec.lastUsedAt)}` : "GET /api/v1/ping cu antetul X-API-Key." },
     { done: o.onec.productsMapped > 0, title: "Sincronizarea nomenclatorului", text: `${num(o.onec.productsMapped)} din ${num(o.onec.productsTotal)} produse au cod 1C (externalId). Potrivirea se face automat după SKU / cod de bare.` },
     { done: o.onec.customersMapped > 0, title: "Sincronizarea contragenților", text: `${num(o.onec.customersMapped)} din ${num(o.onec.customersTotal)} clienți au cod 1C. Potrivire după IDNO / telefon.` },
-    { done: false, title: "Schimb periodic (sarcină programată în 1C)", text: `Recomandat la fiecare 5–15 minute. ${num(o.onec.notExported)} comenzi confirmate așteaptă acum preluarea în 1C.` },
+    { done: !!o.onec.lastUsedAt && o.onec.productsMapped > 0, title: "Schimb periodic (sarcină programată în 1C)", text: `Modulul 1C gata făcut rulează schimbul la fiecare 5–15 minute. ${num(o.onec.notExported)} comenzi confirmate așteaptă acum preluarea în 1C.` },
   ];
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="space-y-4">
+        <SyncStatusCard />
         <Card>
           <CardHeader title="Integrarea cu 1C — pregătită" description="CRM-ul expune un API REST/JSON standard. Programatorul 1C îl apelează din 1C prin HTTPСоединение — fără module externe." icon={Database} />
           <ol className="divide-y divide-line border-t border-line">
@@ -474,6 +537,9 @@ function OneCTab({ go }) {
             <a href="/docs/INTEGRARE-1C.md" target="_blank" rel="noreferrer" className="flex h-9 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-[13.5px] font-medium text-white hover:bg-accent-hover">
               <DownloadSimple size={16} weight="bold" /> Documentația (Markdown)
             </a>
+            <a href="/docs/1c/LuxStoreCRM_Obmen.bsl" target="_blank" rel="noreferrer" className="flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-[13.5px] font-medium text-fg ring-1 ring-inset ring-line-strong hover:bg-surface-2">
+              <Database size={16} /> Modulul de schimb 1C (BSL)
+            </a>
             <a href="/api/v1/openapi.json" target="_blank" rel="noreferrer" className="flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-[13.5px] font-medium text-fg ring-1 ring-inset ring-line-strong hover:bg-surface-2">
               <Code size={16} /> Specificația OpenAPI 3.1 (JSON)
             </a>
@@ -486,6 +552,8 @@ function OneCTab({ go }) {
             <li>• Identificatorul comun este <span className="font-mono text-fg-2">externalId</span> = UUID-ul obiectului din 1C.</li>
             <li>• Trimiterile repetate sunt sigure (idempotente) — nu se creează dubluri.</li>
             <li>• Prețurile și stocurile din 1C suprascriu valorile din CRM.</li>
+            <li>• Ce trimite 1C nu i se mai întoarce înapoi (fără „ecou”), deci nu apar bucle.</li>
+            <li>• Tot ce se schimbă în CRM (interfață, site, bot) ajunge în 1C prin fluxul de modificări.</li>
             <li>• Comenzile se creează în CRM și se preiau în 1C după confirmare.</li>
             <li>• Fiecare cerere apare în Jurnal, cu rezultat și durată.</li>
           </ul>

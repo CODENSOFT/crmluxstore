@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/db";
 import { authenticateApiKey } from "@/lib/apiKeys";
 import { matchRoute, logApiCall } from "@/lib/apiV1";
+import { currentSeq, markOrigin, collectIds } from "@/lib/sync1c";
 import { errorResponse } from "@/lib/api";
 
 export const maxDuration = 300;
@@ -38,7 +39,11 @@ async function handle(req, ctx, method) {
         }
       }
     }
+    const writes = method !== "GET" && route.scope === "write" && key?._id;
+    const startSeq = writes ? await currentSeq() : 0;
     const res = await route.handler({ req, query: new URL(req.url).searchParams, params: route.params, body, key });
+    // ce a modificat aceasta cheie nu i se mai trimite inapoi in fluxul de modificari (fara „ecou”)
+    if (writes) await markOrigin(key._id, startSeq, [...collectIds(res.data)]).catch(() => {});
     if (res.raw) return res.raw;
     if (route.log) {
       const d = describe(res);

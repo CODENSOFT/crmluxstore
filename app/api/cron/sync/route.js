@@ -28,6 +28,8 @@ export async function GET(req) {
     sql`delete from notifications where read and created_at < now() - interval '90 days'`,
     sql`delete from webhook_deliveries where created_at < now() - interval '14 days'`,
     sql`delete from integration_logs where created_at < now() - interval '30 days'`,
+    // fluxul de modificari pentru 1C: se pastreaza 60 de zile (1C confirma de obicei la cateva minute)
+    sql`delete from change_log where at < now() - interval '60 days'`,
   ]).catch((e) => ({ error: e.message }));
   result.purged = Array.isArray(purged) ? purged.reduce((n, r) => n + r.count, 0) : purged;
   await logIntegration({ source: "cron", direction: "in", action: "cron.sync", message: JSON.stringify(result).slice(0, 500) });

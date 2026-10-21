@@ -24,6 +24,13 @@ CRM Lux Store — оперативная система продаж (заказ
 | 1С → CRM | Оплаты (выписка банка, ПКО) | `POST /orders/{id}/payments` |
 | 1С → CRM | Номер налоговой накладной (e-Factura) | `PATCH /orders/{id}` |
 | Сверка | Остатки, движения | `GET /stock`, `GET /movements` |
+| **CRM → 1С** | **Всё, что изменилось в CRM** (товары, клиенты с инд. ценами, заказы с оплатами, остатки, поступления, перемещения, списания, инвентаризации) | **`GET /changes?after=<курсор>`** + `POST /changes/ack` |
+| 1С → CRM | Индивидуальные цены клиента (соглашения) | `POST /customers/{id}/prices` |
+| 1С → CRM | Перемещения, списания | `POST /transfers`, `POST /writeoffs` |
+
+**Готовый модуль 1С:** `/docs/1c/LuxStoreCRM_Obmen.bsl` — общий модуль «ОбменСLuxStoreCRM» (HTTP, JSON, лента изменений, загрузка заказов/клиентов/товаров, отправка номенклатуры, поступлений, оплат). Места, зависящие от конфигурации, помечены «АДАПТИРУЙТЕ».
+
+**Лента изменений** работает как план обмена: CRM сам регистрирует каждое изменение (из интерфейса, с сайта, из Telegram-бота, через API). 1С хранит курсор, забирает изменения пачками и подтверждает курсор. То, что прислала сама 1С, обратно не возвращается (нет «эха»). При записи объектов из CRM в 1С ставьте `ОбменДанными.Загрузка = Истина`, чтобы они не регистрировались к обратной отправке.
 
 Ключ сопоставления — поле **`externalId`** = `Строка(Ссылка.УникальныйИдентификатор())`. Повторная отправка безопасна (идемпотентно): существующие объекты обновляются, дубликаты не создаются.
 
@@ -161,6 +168,37 @@ Rulați din 1C o **sarcină programată** (Регламентное задани
 7. **Plăți** înregistrate în 1C pentru comenzi CRM — `POST /orders/{id}/payments`
 8. (opțional) **Factura fiscală** — `PATCH /orders/{id}` cu `invoice.number`
 9. (zilnic, opțional) **Reconciliere** — `GET /stock` vs. soldurile din 1C; diferențele se analizează, nu se suprascriu automat.
+
+### 4.1 Fluxul de modificări (CRM → 1C) — recomandat
+
+CRM-ul înregistrează **automat** fiecare creare / modificare / ștergere, indiferent de unde vine (interfață, site, bot Telegram, API) — ca un „план обмена”. 1C ține un **cursor** (un număr) și cere periodic ce s-a schimbat după el:
+
+```
+GET /api/v1/changes?after=0&limit=200[&entities=order,customer,product]
+```
+
+```json
+{
+  "ok": true,
+  "data": [
+    { "seq": 1041, "entity": "product",  "id": "3f6c…", "op": "upsert", "at": "2026-10-21T08:12:03.120Z", "data": { "id": "3f6c…", "externalId": null, "sku": "KC-GS-11", "name": "…", "price": 1250, "stock": [ … ], "photoUrl": "https://…" } },
+    { "seq": 1044, "entity": "customer", "id": "8a1d…", "op": "upsert", "data": { "id": "8a1d…", "name": "SRL AquaWash", "prices": [ { "productExternalId": "…", "price": 1090 } ], … } },
+    { "seq": 1052, "entity": "order",    "id": "e1ee…", "op": "upsert", "data": { "number": "CMD-000123", "status": "processing", "items": [ … ], "payments": [ … ] } },
+    { "seq": 1060, "entity": "stock",    "id": "3f6c…", "op": "upsert", "data": { "productExternalId": "…", "stock": [ { "warehouseCode": "DEP-1", "quantity": 12 } ], "totalStock": 12 } }
+  ],
+  "meta": { "after": 0, "cursor": 1060, "hasMore": false, "count": 4 }
+}
+```
+
+- **Entități:** `product`, `category`, `warehouse`, `customer` (cu `prices` = prețurile individuale), `supplier`, `order` (cu linii, plăți, livrare, export 1C), `stock` (soldul produsului pe depozite), `arrival`, `transfer`, `writeoff`, `inventory` (`status: completed` = stoc corectat).
+- **`data`** este starea **completă și actuală** a obiectului (același format ca la `GET` pe acel tip). Dacă un obiect s-a schimbat de mai multe ori, vine o singură dată, cu ultima stare.
+- **`op: "delete"`** → obiectul a fost șters în CRM (`data: null`).
+- Continuați cu `after = meta.cursor` cât timp `hasMore = true`. Salvați cursorul în 1C **după** ce ați procesat pachetul.
+- Confirmați: `POST /changes/ack` cu `{ "cursor": 1060 }` — în CRM (Integrări → 1C) se vede că 1C e la zi.
+- **Fără ecou:** ce a trimis chiar cheia dumneavoastră (`POST /products`, `/customers`, `/arrivals`…) nu vă mai este întors în flux. Adăugați `includeOwn=1` dacă îl doriți totuși.
+- **Prima pornire:** încărcați totul cu listele paginate (`GET /products`, `/customers` …), apoi luați cursorul curent cu `GET /changes/cursor` și continuați incremental.
+- Starea unui singur obiect, oricând: `GET /objects/{entity}/{id}`.
+- Fluxul se păstrează 60 de zile.
 
 ---
 
@@ -380,7 +418,36 @@ Stocul crește imediat; `updateCostPrice: true` actualizează prețul de achizi�
 
 ---
 
+### 5.10 Prețuri individuale pe client
+
+```
+GET  /customers/{id}/prices            (id = id CRM, externalId, IDNO sau număr client)
+POST /customers/{id}/prices
+{ "mode": "replace", "items": [ { "productExternalId": "…", "price": 1090 }, { "sku": "FOX-5", "price": 350 } ] }
+```
+
+`replace` înlocuiește lista clientului, `merge` adaugă / actualizează doar produsele trimise. Comenzile clientului (din CRM, site, bot) folosesc automat aceste prețuri.
+
+### 5.11 Transferuri și casări din 1C
+
+```
+POST /transfers  { "externalId": "…", "fromWarehouseCode": "DEP-1", "toWarehouseCode": "MAG-1", "items": [ { "productExternalId": "…", "quantity": 5 } ] }
+POST /writeoffs  { "externalId": "…", "warehouseCode": "DEP-1", "reasonCode": "damaged", "reason": "…", "items": [ { "sku": "KC-GS-11", "quantity": 1 } ] }
+```
+
+`reasonCode`: `expired`, `damaged`, `defect`, `internal`, `sample`, `lost`, `other`. Trimiterea repetată cu același `externalId` nu creează dubluri.
+
+### 5.12 Documente din CRM (pentru 1C)
+
+```
+GET /transfers?updatedSince=…     GET /writeoffs?updatedSince=…     GET /inventory?updatedSince=…   (doar inventarieri finalizate)
+```
+
+Același format ca în fluxul de modificări.
+
 ## 6. Exemple de cod 1C (BSL)
+
+> Modulul complet, gata de folosit: **`/docs/1c/LuxStoreCRM_Obmen.bsl`** (общий модуль «ОбменСLuxStoreCRM»). Exemplele de mai jos sunt extrase din el.
 
 ### 6.1 Funcție comună de apel
 

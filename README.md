@@ -88,6 +88,11 @@ CRM → **Integrări → Site luxstore.md**: adresa site-ului + cheile REST API 
 CRM → **Integrări → Bot Telegram**: creați botul la @BotFather, lipiți tokenul, alegeți depozitul din care se vinde → **Conectează botul**. Comenzile apar în CRM ca „Nouă” cu sursa „Bot Telegram”.
 
 ### 1C
+Schimb **direct și bidirecțional**, fără servicii intermediare:
+- **1C → CRM:** depozite, grupe, nomenclator cu prețuri și coduri de bare, stocuri, contragenți, prețuri individuale, recepții, transferuri, casări, plăți, confirmarea preluării comenzilor.
+- **CRM → 1C:** **fluxul de modificări** `GET /api/v1/changes?after=<cursor>` — tot ce se schimbă în CRM (din interfață, site, bot, API) se înregistrează automat (trigger-e în baza de date) și ajunge în 1C cu starea completă a obiectului; 1C confirmă cursorul (`POST /changes/ack`), iar ce a trimis chiar 1C nu i se întoarce (fără ecou).
+- **Modul 1C gata făcut:** `public/docs/1c/LuxStoreCRM_Obmen.bsl` (общий модуль „ОбменСLuxStoreCRM”); starea schimbului se vede în **Integrări → 1C**.
+
 API REST v1 la `/api/v1`, cu chei create din **Integrări → API și chei** (tip 1C).
 Documentația completă pentru programatorul 1C (flux, JSON, exemple de cod BSL): **[`public/docs/INTEGRARE-1C.md`](public/docs/INTEGRARE-1C.md)** — disponibilă și în aplicație la `/docs/INTEGRARE-1C.md`. Specificația OpenAPI: `/api/v1/openapi.json`.
 
