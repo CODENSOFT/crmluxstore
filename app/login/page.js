@@ -46,7 +46,7 @@ function LoginForm() {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="nume@luxstore.md"
           required
-          autoFocus
+          focusFirst
           className="h-10"
         />
       </Field>
@@ -79,6 +79,7 @@ function saveLang(l) {
   document.cookie = `lux-lang=${l}; path=/; max-age=31536000; samesite=lax`;
   window.location.reload();
 }
+// abonare „fara evenimente” pentru useSyncExternalStore (valoarea difera doar intre server si browser)
 const noop = () => () => {};
 function LangSwitch() {
   const cur = useSyncExternalStore(noop, () => (document.documentElement.lang === "ru" ? "ru" : "ro"), () => "ro");

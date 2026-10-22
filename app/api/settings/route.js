@@ -7,7 +7,7 @@ const COMPANY = ["companyName", "legalName", "idno", "vatCode", "iban", "bank", 
 
 
 function publicView(s) {
-  const { woo, telegram, ...rest } = s;
+  const { woo: _woo, telegram: _telegram, ...rest } = s; // secretele integrarilor nu se trimit in interfata
   return rest;
 }
 

@@ -126,7 +126,7 @@ export function ProductForm({ product }) {
 
         <FormSection icon={Tag} title="Informații de bază" description="Denumirea și codurile după care produsul se caută la vânzare, se scanează și se leagă de site / 1C.">
           <Field label="Denumire" required>
-            <Input autoFocus={!product} value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="ex: Koch-Chemie Green Star 11 kg" />
+            <Input focusFirst={!product} value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="ex: Koch-Chemie Green Star 11 kg" />
           </Field>
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Cod articol (SKU)">

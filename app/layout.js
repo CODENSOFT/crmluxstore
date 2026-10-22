@@ -18,7 +18,7 @@ export const viewport = {
 };
 
 // Aplica tema salvata inainte de randare (fara „flash” de tema gresita)
-const themeScript = `try{var t=localStorage.getItem("lux-theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem("lux-theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch(e){/* stocare indisponibila (navigare privata): tema implicita */}`;
 
 export default function RootLayout({ children }) {
   return (

@@ -1,16 +1,15 @@
 "use client";
 
-import { isAdminUser } from "@/lib/permissions";
+import { isAdminUser, PERMISSIONS } from "@/lib/permissions";
 import { Suspense, useState } from "react";
 import { apiPatch, apiPut } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { useUser } from "@/app/_components/user";
 import { roleLabel } from "@/lib/constants";
-import { Card, CardHeader, PageHeader, Tabs, Field, Input, NumberInput, PasswordInput, Select, Textarea, Switch, Button, Skeleton, IconButton, Avatar, cx } from "@/app/_components/ui";
+import { Card, CardHeader, PageHeader, Tabs, Field, Input, NumberInput, PasswordInput, Select, Textarea, Switch, Button, Skeleton, IconButton, Avatar, ErrorState, cx } from "@/app/_components/ui";
 import { useToast } from "@/app/_components/overlay";
 import { Buildings, Receipt, Truck, Stack, UserCircle, Lock, Plus, Trash, FloppyDisk, ShieldCheck, CheckCircle, Globe } from "@/app/_components/icons";
-import { PERMISSIONS } from "@/lib/permissions";
 import { LANGS } from "@/lib/i18n/runtime";
 
 function SaveBar({ busy, onSave, dirty }) {
@@ -134,7 +133,8 @@ function AdminSettings({ tab, s, onSaved }) {
 }
 
 function Profile() {
-  const { data: me, mutate } = useApi("/api/profile");
+  const { data: me, mutate, error, reload } = useApi("/api/profile");
+  if (error && !me) return <Card><ErrorState error={error} onRetry={reload} /></Card>;
   if (!me) return <Skeleton className="h-64" />;
   return <ProfileForm me={me} mutate={mutate} />;
 }

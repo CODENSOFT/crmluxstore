@@ -73,7 +73,7 @@ export const GET = route(async ({ user }) => {
     newOrders,
     approval,
     tasks: { items: myTasks, ...taskCounts },
-    teamOverdue: teamTasks ? { items: teamOverdue.map(({ fullCount, ...t }) => t), count: teamOverdue[0]?.fullCount || 0 } : null,
+    teamOverdue: teamTasks ? { items: teamOverdue.map(({ fullCount: _fullCount, ...t }) => t), count: teamOverdue[0]?.fullCount || 0 } : null,
     stock: {
       out: { items: out.slice(0, 8).map(withSuggestion), count: out.length },
       low: { items: low.slice(0, 8).map(withSuggestion), count: low.length },

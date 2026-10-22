@@ -7,9 +7,10 @@ import { useQueryState } from "@/lib/useQueryState";
 import { formatDateTime, relativeTime, num } from "@/lib/format";
 import { WEBHOOK_EVENTS } from "@/lib/constants";
 import {
-  Card, CardHeader, PageHeader, Tabs, Button, Field, Input, PasswordInput, Select, Switch, Badge, Alert, EmptyState, Skeleton, Checkbox, Segmented, cx, Dot, FormSection, Textarea,
+  Card, CardHeader, PageHeader, Tabs, Button, Field, Input, PasswordInput, Select, Switch, Badge, Alert, EmptyState, ErrorState, Skeleton, Checkbox, Segmented, cx, Dot, FormSection, Textarea,
 } from "@/app/_components/ui";
 import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
+import { useUser } from "@/app/_components/user";
 import { Modal, Drawer, Menu, useConfirm, useToast } from "@/app/_components/overlay";
 import {
   Globe, Key, WebhooksLogo, Database, Copy, Check, ArrowsClockwise, PaperPlaneTilt, Plus, Trash, DotsThree, CheckCircle, WarningCircle, DownloadSimple, BookOpen,
@@ -124,7 +125,8 @@ function DbMoveCard() {
 }
 
 function Overview({ go }) {
-  const { data: o } = useApi("/api/integrations/overview");
+  const { data: o, error, reload } = useApi("/api/integrations/overview");
+  if (error && !o) return <Card><ErrorState error={error} onRetry={reload} /></Card>;
   if (!o) return <Skeleton className="h-80" />;
   const cards = [
     {
@@ -725,7 +727,7 @@ function KeysTab() {
       >
         <div className="space-y-4">
           <Field label="Nume" hint="Pentru cine este cheia">
-            <Input autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="1C Contabilitate" />
+            <Input focusFirst="always" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="1C Contabilitate" />
           </Field>
           <Field label="Sistem">
             <Segmented className="w-full [&>button]:flex-1 [&>button]:justify-center" value={f.kind} onChange={(v) => setF({ ...f, kind: v })} options={[{ value: "1c", label: "1C" }, { value: "generic", label: "Altă aplicație" }]} />
@@ -762,7 +764,8 @@ function HookFormBody({ open, onClose, hook, onSaved }) {
   const save = async () => {
     setBusy(true);
     try {
-      hook ? await apiPatch(`/api/integrations/webhooks/${hook._id}`, f) : await apiPost("/api/integrations/webhooks", f);
+      if (hook) await apiPatch(`/api/integrations/webhooks/${hook._id}`, f);
+      else await apiPost("/api/integrations/webhooks", f);
       toast("Webhook-ul a fost salvat");
       onSaved();
       onClose();
@@ -955,6 +958,18 @@ function Inner() {
 }
 
 export default function IntegrationsPage() {
+  const user = useUser();
+  // integrarile (site, bot, 1C, chei API) le configureaza doar administratorul principal
+  if (user.role !== "owner") {
+    return (
+      <div className="animate-in">
+        <PageHeader title="Integrări" />
+        <Card>
+          <EmptyState icon={Prohibit} title="Doar administratorul principal" description="Conexiunile cu site-ul, botul Telegram, 1C și cheile API le configurează administratorul principal." />
+        </Card>
+      </div>
+    );
+  }
   return (
     <Suspense>
       <Inner />

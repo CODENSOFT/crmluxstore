@@ -114,7 +114,7 @@ export function CustomerForm({ customer }) {
             ]}
           />
           <Field label={company ? "Denumirea companiei" : "Nume și prenume"} required>
-            <Input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder={company ? "SRL AquaWash Self-Service" : "Ion Popescu"} />
+            <Input focusFirst value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder={company ? "SRL AquaWash Self-Service" : "Ion Popescu"} />
           </Field>
           {company && (
             <Field label="Persoană de contact">

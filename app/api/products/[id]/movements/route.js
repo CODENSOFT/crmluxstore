@@ -13,5 +13,5 @@ export const GET = route(async ({ params, query }) => {
     from stock_movements m
     where m.product_id = ${params.id} ${wh ? sql`and m.warehouse_id = ${wh}` : sql``}
     order by m.created_at desc, m.seq desc limit ${limit} offset ${skip}`;
-  return { items: rows.map(({ fullCount, ...m }) => m), total: rows[0]?.fullCount || 0 };
+  return { items: rows.map(({ fullCount: _fullCount, ...m }) => m), total: rows[0]?.fullCount || 0 };
 });

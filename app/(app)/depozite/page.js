@@ -2,7 +2,7 @@
 
 import { isAdminUser } from "@/lib/permissions";
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { apiDelete, apiPatch, apiPost } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
 import { useUser } from "@/app/_components/user";
@@ -27,7 +27,8 @@ function WarehouseFormBody({ open, onClose, wh, onSaved }) {
   const save = async () => {
     setBusy(true);
     try {
-      wh ? await apiPatch(`/api/warehouses/${wh._id}`, f) : await apiPost("/api/warehouses", f);
+      if (wh) await apiPatch(`/api/warehouses/${wh._id}`, f);
+      else await apiPost("/api/warehouses", f);
       toast(wh ? "Depozitul a fost actualizat" : "Depozitul a fost creat");
       invalidate("/api/warehouses", "/api/stock", "/api/settings");
       onSaved();
@@ -52,7 +53,7 @@ function WarehouseFormBody({ open, onClose, wh, onSaved }) {
     >
       <div className="space-y-3">
         <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
-          <Field label="Denumire" required><Input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="Magazin Lunca Bîcului" /></Field>
+          <Field label="Denumire" required><Input focusFirst="always" value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="Magazin Lunca Bîcului" /></Field>
           <Field label="Cod" hint="pentru 1C"><Input value={f.code} onChange={(e) => set({ code: e.target.value })} placeholder="MAG-1" /></Field>
         </div>
         <Field label="Tip">

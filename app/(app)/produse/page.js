@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useRouter } from "next/navigation";
 import { useApi, qs, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";

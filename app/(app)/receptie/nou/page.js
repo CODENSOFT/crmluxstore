@@ -58,7 +58,7 @@ function NewArrival() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card className="min-w-0">
           <CardHeader title="Produse primite" icon={Package} />
-          <DocLinesEditor lines={lines} setLines={(fn) => setLines(typeof fn === "function" ? fn(lines) : fn)} products={products} withCost autoFocus />
+          <DocLinesEditor lines={lines} setLines={(fn) => setLines(typeof fn === "function" ? fn(lines) : fn)} products={products} withCost focusFirst />
         </Card>
         <div className="space-y-4 xl:sticky xl:top-[72px] xl:self-start">
           <Card>

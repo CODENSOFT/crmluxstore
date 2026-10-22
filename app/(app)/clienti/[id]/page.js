@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useRouter } from "next/navigation";
 import { apiDelete, apiPost } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";

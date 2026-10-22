@@ -1,13 +1,13 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useApi, qs } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { useUser, can } from "@/app/_components/user";
 import { money, moneyShort, num, pct, formatDate, ymd } from "@/lib/format";
 import { CHANNELS, segmentLabel, UNIT_LABELS } from "@/lib/constants";
-import { Card, CardHeader, PageHeader, Tabs, Select, Input, Stat, Segmented, Badge, Skeleton, EmptyState, cx } from "@/app/_components/ui";
+import { Card, CardHeader, PageHeader, Tabs, Select, Input, Stat, Segmented, Badge, Skeleton, EmptyState, ErrorState, cx } from "@/app/_components/ui";
 import { DataTable } from "@/app/_components/table";
 import { ColumnChart, BarList } from "@/app/_components/charts";
 import { DownloadSimple, Coins, Receipt, Tag, ChartLineUp, Wallet, UsersThree, Warning, Stack, Package } from "@/app/_components/icons";
@@ -45,9 +45,10 @@ function Export({ href }) {
 }
 
 function Sales({ params }) {
-  const { data: d, loading } = useApi(`/api/reports/sales${qs(params)}`);
+  const { data: d, loading, error, reload } = useApi(`/api/reports/sales${qs(params)}`);
   const s = d?.summary;
   const chart = useMemo(() => (d?.series || []).map((x) => ({ label: params.group === "day" ? formatDate(x.key + "T12:00:00").slice(0, 5) : x.key, tooltipLabel: x.key, value: x.revenue, sub: `${x.orders} comenzi · marjă ${moneyShort(x.margin)}` })), [d, params.group]);
+  if (error && !d) return <Card><ErrorState error={error} onRetry={reload} /></Card>;
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -195,7 +196,8 @@ function Debts() {
 }
 
 function StockReport() {
-  const { data: d } = useApi(`/api/reports/stock`);
+  const { data: d, error, reload } = useApi(`/api/reports/stock`);
+  if (error && !d) return <Card><ErrorState error={error} onRetry={reload} /></Card>;
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
@@ -218,7 +220,8 @@ function StockReport() {
 }
 
 function Writeoffs({ params }) {
-  const { data: d } = useApi(`/api/reports/writeoffs${qs(params)}`);
+  const { data: d, error, reload } = useApi(`/api/reports/writeoffs${qs(params)}`);
+  if (error && !d) return <Card><ErrorState error={error} onRetry={reload} /></Card>;
   return (
     <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
       <div className="space-y-4">

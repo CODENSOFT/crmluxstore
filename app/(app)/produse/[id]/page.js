@@ -2,7 +2,7 @@
 
 import { isAdminUser } from "@/lib/permissions";
 import { use, useState } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useRouter } from "next/navigation";
 import { apiDelete, apiPost, apiPatch } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";

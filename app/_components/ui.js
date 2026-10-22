@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useEffect, useRef, useState, useId } from "react";
 import { CircleNotch, CaretDown, Eye, EyeSlash, MagnifyingGlass, X, ArrowLeft, ArrowUpRight, ArrowDownRight } from "./icons";
 import { stageInfo } from "@/lib/orderStages";
@@ -190,12 +190,40 @@ export function Field({ label, hint, error, required, children, className, htmlF
 export const inputBase =
   "w-full rounded-lg border border-line-strong/80 bg-surface px-3 text-[13.5px] text-fg shadow-xs outline-none transition-[border,box-shadow] placeholder:text-fg-4 hover:border-line-strong focus:border-accent focus:shadow-[var(--ring)] disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-fg-3";
 
-export function Input({ className, prefix, suffix, invalid, ...props }) {
+/**
+ * Focalizarea unui camp la prima afisare (in locul atributului autoFocus):
+ *  - true / "desktop": doar pe ecrane cu mouse — pe telefon nu deschidem tastatura singuri cand se deschide pagina;
+ *  - "always": si pe telefon, cand utilizatorul tocmai a deschis o cautare / o fereastra pentru a scrie.
+ */
+export function shouldFocusOnOpen(mode) {
+  if (!mode || typeof window === "undefined") return false;
+  return mode === "always" || !window.matchMedia?.("(pointer: coarse)").matches;
+}
+export function useFocusOnOpen(mode) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (shouldFocusOnOpen(mode)) ref.current?.focus();
+    // doar la prima afisare
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return ref;
+}
+const mergeRefs = (...refs) => (el) => {
+  for (const r of refs) {
+    if (typeof r === "function") r(el);
+    else if (r) r.current = el;
+  }
+};
+
+export function Input({ className, prefix, suffix, invalid, focusFirst, ref, ...props }) {
+  const focusRef = useFocusOnOpen(focusFirst);
+  const setRef = mergeRefs(ref, focusRef);
   if (prefix || suffix) {
     return (
       <div className={cx("relative flex items-center", className)}>
         {prefix && <span className="pointer-events-none absolute left-3 flex items-center text-fg-3">{prefix}</span>}
         <input
+          ref={setRef}
           className={cx(inputBase, "h-9", prefix && "pl-9", suffix && "pr-12", invalid && "border-bad")}
           {...props}
         />
@@ -203,7 +231,7 @@ export function Input({ className, prefix, suffix, invalid, ...props }) {
       </div>
     );
   }
-  return <input className={cx(inputBase, "h-9", invalid && "border-bad", className)} {...props} />;
+  return <input ref={setRef} className={cx(inputBase, "h-9", invalid && "border-bad", className)} {...props} />;
 }
 
 export function NumberInput({ value, onChange, className, ...props }) {
@@ -287,6 +315,7 @@ export function Switch({ checked, onChange, label, description, disabled, classN
         type="button"
         role="switch"
         aria-checked={!!checked}
+        aria-label={typeof label === "string" ? label : undefined}
         disabled={disabled}
         onClick={() => onChange?.(!checked)}
         className={cx(
@@ -335,7 +364,8 @@ export function Segmented({ options, value, onChange, size = "md", className }) 
 }
 
 // Cautare cu intarziere (debounce)
-export function SearchInput({ value, onChange, placeholder = "Caută…", delay = 250, className, autoFocus }) {
+export function SearchInput({ value, onChange, placeholder = "Caută…", delay = 250, className, focusFirst }) {
+  const focusRef = useFocusOnOpen(focusFirst);
   const [v, setV] = useState(value || "");
   const [prev, setPrev] = useState(value);
   const first = useRef(true);
@@ -359,8 +389,8 @@ export function SearchInput({ value, onChange, placeholder = "Caută…", delay 
     <div className={cx("relative", className)}>
       <MagnifyingGlass size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3" />
       <input
+        ref={focusRef}
         value={v}
-        autoFocus={autoFocus}
         onChange={(e) => setV(e.target.value)}
         placeholder={placeholder}
         className={cx(inputBase, "h-9 pl-9 pr-8")}
@@ -498,11 +528,15 @@ export function EmptyState({ icon: IconC, title, description, action, className,
 }
 
 export function ErrorState({ error, onRetry }) {
+  // fara drept / inexistent: reincercarea nu ajuta — spunem clar ce s-a intamplat
+  const status = error?.status;
+  const title = status === 403 ? "Nu aveți acces" : status === 404 ? "Nu a fost găsit" : "Datele nu s-au putut încărca";
+  const canRetry = onRetry && status !== 403 && status !== 404;
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      <p className="text-[14px] font-semibold text-fg">Datele nu s-au putut încărca</p>
+      <p className="text-[14px] font-semibold text-fg">{title}</p>
       <p className="mt-1 max-w-md text-[13px] text-fg-3">{error?.message || "Eroare necunoscută"}</p>
-      {onRetry && (
+      {canRetry && (
         <Button size="sm" className="mt-4" onClick={onRetry}>
           Reîncearcă
         </Button>

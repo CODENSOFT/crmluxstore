@@ -77,7 +77,7 @@ export const GET = route(async ({ query }) => {
                count(*) filter (where c.type = 'company')::int as b2b
         from customers c where ${w}`,
   ]);
-  return { items: items.map(({ fullCount, ...c }) => c), total: items[0]?.fullCount || 0, page, limit, summary };
+  return { items: items.map(({ fullCount: _fullCount, ...c }) => c), total: items[0]?.fullCount || 0, page, limit, summary };
 });
 
 export const POST = route(async ({ req, user }) => {

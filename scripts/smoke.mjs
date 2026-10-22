@@ -1,16 +1,25 @@
 // Test complet end-to-end al API-ului (comenzi, stoc, aprobari, plati, inventariere, API v1 / 1C, webhook site).
-// ATENTIE: ruleaza DOAR pe o baza de date de test goala (creeaza si sterge date).
-//   1) porniti serverul cu o baza de test:  POSTGRES_URL=postgres://postgres:postgres@localhost:5432/crm_test npm run dev
-//   2) B=http://localhost:3030 node scripts/smoke.mjs
+// ATENTIE: ruleaza DOAR pe o baza de date de test goala (creeaza si sterge date). NICIODATA pe site.
+//   1) porniti serverul cu o baza de test:  NOU_POSTGRES_URL= POSTGRES_URL=postgres://postgres:postgres@localhost:5432/crm_test npm run dev
+//   2) B=http://localhost:3030 node --env-file=.env.local scripts/smoke.mjs
+// Contul de administrator al bazei de test vine din mediu (SMOKE_ADMIN_* sau SEED_ADMIN_*, ca la crearea bazei);
+// angajatul de test primeste o parola aleatorie la fiecare rulare.
 import crypto from "node:crypto";
 const B = process.env.B || "http://localhost:3031";
+if (!/^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(B)) throw new Error(`Testele ruleaza doar pe un server local, nu pe ${B}`);
+const ADMIN = {
+  email: process.env.SMOKE_ADMIN_EMAIL || process.env.SEED_ADMIN_EMAIL || "admin@crm.local",
+  password: process.env.SMOKE_ADMIN_PASSWORD || process.env.SEED_ADMIN_PASSWORD,
+};
+if (!ADMIN.password) throw new Error("Lipseste parola administratorului de test: setati SMOKE_ADMIN_PASSWORD sau rulati cu --env-file=.env.local");
+const MANAGER_PASSWORD = crypto.randomBytes(12).toString("base64url");
 let fails = 0;
 const jars = {};
 async function call(who, method, path, body, headers = {}) {
   const res = await fetch(B + path, {
     method,
     headers: { "Content-Type": "application/json", ...(jars[who] ? { cookie: jars[who] } : {}), ...headers },
-    body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
+    ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
     redirect: "manual",
   });
   const sc = res.headers.getSetCookie?.() || [];
@@ -26,7 +35,7 @@ function check(name, cond, extra) {
 }
 const stockOf = (p, w) => (p.stock || []).find((s) => String(s.warehouse?._id || s.warehouse) === String(w))?.quantity ?? 0;
 
-let r = await call("a", "POST", "/api/auth/login", { email: "admin@crm.local", password: "admin123" });
+let r = await call("a", "POST", "/api/auth/login", ADMIN);
 check("login admin", r.ok, r);
 r = await call("a", "GET", "/api/warehouses");
 check("depozit implicit seed", r.ok && r.data.length >= 1, r);
@@ -68,10 +77,10 @@ check("stoc scazut la 90", stockOf(r.data, WA) === 90, r.data?.stock);
 r = await call("a", "POST", "/api/orders", { items: [{ product: P1, warehouse: WA, quantity: 1000 }] });
 check("stoc insuficient respins", !r.ok && /Stoc insuficient/.test(r.error), r);
 
-r = await call("a", "POST", "/api/users", { name: "Ana Manager", email: "ana@luxstore.md", password: "parola123", role: "manager" });
+r = await call("a", "POST", "/api/users", { name: "Ana Manager", email: "ana@luxstore.md", password: MANAGER_PASSWORD, role: "manager" });
 check("creare manager", r.ok, r);
 const MID = r.data._id;
-r = await call("m", "POST", "/api/auth/login", { email: "ana@luxstore.md", password: "parola123" });
+r = await call("m", "POST", "/api/auth/login", { email: "ana@luxstore.md", password: MANAGER_PASSWORD });
 check("login manager", r.ok, r);
 r = await call("m", "POST", "/api/orders", { customerName: "Ion Rusu", customerPhone: "079555111", items: [{ product: P1, warehouse: WA, quantity: 5 }] });
 check("comanda manager -> asteapta aprobare", r.ok && r.data.status === "pending_approval", r);

@@ -40,7 +40,7 @@ const SKIP_TEXT = `${SKIP},textarea`;
 
 function install(lang) {
   const translate = translatorFor(lang);
-  if (!translate || typeof document === "undefined") return () => {};
+  if (!translate || typeof document === "undefined") return () => {}; // romana: nimic de tradus, nimic de oprit
   const skipped = (el) => !el || !!el.closest?.(SKIP);
   const skippedText = (el) => !el || !!el.closest?.(SKIP_TEXT);
   const doText = (n) => {
@@ -93,6 +93,7 @@ function install(lang) {
  * Pentru rusa, continutul se afiseaza doar in browser (fara randare pe server), iar traducerea
  * se aplica inainte de afisare — fara clipire si fara nepotriviri de hidratare.
  */
+// abonare „fara evenimente” pentru useSyncExternalStore (valoarea difera doar intre server si browser)
 const noop = () => () => {};
 export function LanguageProvider({ lang, children }) {
   const isClient = useSyncExternalStore(noop, () => true, () => false);

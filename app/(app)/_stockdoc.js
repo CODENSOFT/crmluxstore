@@ -15,7 +15,7 @@ export const lineKey = () => `d${++seq}`;
  * lines: [{ key, product (obiect), quantity, unitCost? }]
  * withCost -> coloana pret de achizitie; checkStock -> avertizare daca depaseste stocul din `warehouse`
  */
-export function DocLinesEditor({ lines, setLines, products, warehouse, withCost, checkStock, autoFocus }) {
+export function DocLinesEditor({ lines, setLines, products, warehouse, withCost, checkStock, focusFirst }) {
   const byId = useMemo(() => new Map((products || []).map((p) => [String(p._id), p])), [products]);
   const add = (p) =>
     setLines((ls) => {
@@ -29,7 +29,7 @@ export function DocLinesEditor({ lines, setLines, products, warehouse, withCost,
   return (
     <div className="@container">
       <div className="px-5 pb-4">
-        <ProductPicker products={products} warehouse={warehouse} onSelect={add} autoFocus={autoFocus} />
+        <ProductPicker products={products} warehouse={warehouse} onSelect={add} focusFirst={focusFirst} />
       </div>
       {lines.length === 0 ? (
         <div className="border-t border-line">
@@ -63,9 +63,9 @@ export function DocLinesEditor({ lines, setLines, products, warehouse, withCost,
                 </label>
                 {withCost && (
                   <>
-                    <label className="block">
+                    <label className="block" htmlFor={`ln-cost-${l.key}`}>
                       <span className="mb-1 block text-[11.5px] text-fg-3 @xl:hidden">Preț achiziție</span>
-                      <NumberInput value={l.unitCost} onChange={(v) => upd(l.key, { unitCost: v })} className="text-right" placeholder="0,00" aria-label="Preț de achiziție" />
+                      <NumberInput id={`ln-cost-${l.key}`} value={l.unitCost} onChange={(v) => upd(l.key, { unitCost: v })} className="text-right" placeholder="0,00" aria-label="Preț de achiziție" />
                     </label>
                     <div className="tnum self-end text-right text-[13.5px] font-medium text-fg @xl:self-auto">{money(qty * (Number(l.unitCost) || 0))}</div>
                   </>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MagnifyingGlass, Plus, Buildings, User, CircleNotch, X } from "./icons";
-import { cx, inputBase, Badge } from "./ui";
+import { cx, inputBase, Badge, shouldFocusOnOpen } from "./ui";
 import { api } from "@/lib/client";
 import { UNIT_LABELS, segmentLabel } from "@/lib/constants";
 import { num } from "@/lib/format";
@@ -17,7 +17,7 @@ export function Combobox({
   renderItem,
   placeholder = "Caută…",
   footer,
-  autoFocus,
+  focusFirst,
   className,
   onEnterRaw,
   clearOnSelect = true,
@@ -34,6 +34,12 @@ export function Combobox({
   const wrap = useRef(null);
   const innerRef = useRef(null);
   const inputRef = externalRef || innerRef;
+  // focalizare la deschidere (pe telefon doar daca e ceruta explicit — vezi shouldFocusOnOpen)
+  useEffect(() => {
+    if (shouldFocusOnOpen(focusFirst)) inputRef.current?.focus();
+    // doar la prima afisare
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const req = useRef(0);
 
   useEffect(() => {
@@ -75,7 +81,6 @@ export function Combobox({
         ref={inputRef}
         value={q}
         disabled={disabled}
-        autoFocus={autoFocus}
         placeholder={placeholder}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
@@ -163,13 +168,13 @@ export function filterProducts(products, q, limit = 40) {
     .map((x) => x[1]);
 }
 
-export function ProductPicker({ products, warehouse, onSelect, placeholder = "Caută produs după nume, SKU sau cod de bare…", priceType, autoFocus, inputRef }) {
+export function ProductPicker({ products, warehouse, onSelect, placeholder = "Caută produs după nume, SKU sau cod de bare…", priceType, focusFirst, inputRef }) {
   const search = useMemo(() => (q) => filterProducts(products || [], q), [products]);
   return (
     <Combobox
       search={search}
       onSelect={onSelect}
-      autoFocus={autoFocus}
+      focusFirst={focusFirst}
       inputRef={inputRef}
       placeholder={placeholder}
       // Scanner de coduri de bare: Enter cu cod exact -> adauga direct
@@ -206,13 +211,13 @@ export function ProductPicker({ products, warehouse, onSelect, placeholder = "Ca
   );
 }
 
-export function CustomerPicker({ onSelect, onCreate, placeholder = "Caută client după nume, telefon sau IDNO…", autoFocus }) {
+export function CustomerPicker({ onSelect, onCreate, placeholder = "Caută client după nume, telefon sau IDNO…", focusFirst }) {
   const search = useMemo(() => (q) => api(`/api/customers?light=1&limit=12&q=${encodeURIComponent(q)}`), []);
   return (
     <Combobox
       search={search}
       onSelect={onSelect}
-      autoFocus={autoFocus}
+      focusFirst={focusFirst}
       placeholder={placeholder}
       renderItem={(c) => (
         <>

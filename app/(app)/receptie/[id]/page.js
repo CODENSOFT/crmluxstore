@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useApi } from "@/lib/useApi";
 import { money, num, formatDate, formatDateTime } from "@/lib/format";
 import { UNIT_LABELS } from "@/lib/constants";
@@ -71,7 +71,7 @@ export default function ArrivalPage({ params }) {
               items={[
                 ["Număr", d.number],
                 ["Depozit", d.warehouse?.name],
-                ["Furnizor", d.supplierId ? <Link href={`/furnizori/${d.supplierId}`} className="text-accent hover:underline">{d.supplier}</Link> : d.supplier],
+                ["Furnizor", d.supplierId ? <Link key="furnizor" href={`/furnizori/${d.supplierId}`} className="text-accent hover:underline">{d.supplier}</Link> : d.supplier],
                 ["Factură furnizor", d.supplierInvoice ? `${d.supplierInvoice}${d.supplierInvoiceDate ? ` din ${formatDate(d.supplierInvoiceDate)}` : ""}` : null],
                 ["Înregistrat de", d.createdBy?.name || (d.source && d.source !== "crm" ? d.source.toUpperCase() : null)],
                 ["Cod 1C", d.externalId],

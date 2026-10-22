@@ -256,7 +256,7 @@ export function CategoriesModal({ open, onClose }) {
             <li key={c._id} className="flex items-center gap-2 px-3 py-2">
               {editing === c._id ? (
                 <>
-                  <Input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && rename(c)} />
+                  <Input focusFirst="always" value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && rename(c)} />
                   <IconButton icon={Check} label="Salvează" size="sm" onClick={() => rename(c)} />
                   <IconButton icon={X} label="Renunță" size="sm" onClick={() => setEditing(null)} />
                 </>

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useState } from "react";
 import { useApi, invalidate } from "@/lib/useApi";
 import { apiPatch } from "@/lib/client";
@@ -8,7 +8,7 @@ import { useUser } from "@/app/_components/user";
 import { useToast } from "@/app/_components/overlay";
 import { money, relativeTime, num, formatDate, plural } from "@/lib/format";
 import { channelLabel, UNIT_LABELS, TASK_PRIORITY } from "@/lib/constants";
-import { Card, CardHeader, PageHeader, ButtonLink, Badge, Skeleton, EmptyState, cx } from "@/app/_components/ui";
+import { Card, CardHeader, PageHeader, ButtonLink, Badge, Skeleton, EmptyState, ErrorState, cx } from "@/app/_components/ui";
 import {
   Plus, TrayArrowDown, Receipt, Clock, Warning, CheckSquareOffset, ArrowRight, Package, Prohibit, Truck, Timer, Circle,
   Play, Check, CheckCircle, ClipboardText, CalendarBlank, Sparkle, UsersThree,
@@ -330,7 +330,7 @@ function Inventories({ list }) {
 
 export default function Dashboard() {
   const user = useUser();
-  const { data: d, loading, reload } = useApi("/api/dashboard", { refreshInterval: 60000 });
+  const { data: d, loading, error, reload } = useApi("/api/dashboard", { refreshInterval: 60000 });
   const firstName = user.name.split(" ")[0];
   const c = d?.counts || {};
   const wait = loading && !d;
@@ -374,6 +374,12 @@ export default function Dashboard() {
           </>
         }
       />
+
+      {error && !d && (
+        <Card className="mb-4">
+          <ErrorState error={error} onRetry={reload} />
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {tiles.map(({ key, ...t }) => (

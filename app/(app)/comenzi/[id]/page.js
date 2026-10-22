@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useRouter } from "next/navigation";
 import { apiPatch, apiPost, apiDelete } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
@@ -287,7 +287,7 @@ function InlineEdit({ label, value, placeholder, onSave, type = "text" }) {
     <div>
       <div className="mb-1 text-[12px] text-fg-3">{label}</div>
       <div className="flex gap-1.5">
-        <Input type={type} autoFocus value={v} onChange={(e) => setV(e.target.value)} placeholder={placeholder} />
+        <Input type={type} focusFirst="always" value={v} onChange={(e) => setV(e.target.value)} placeholder={placeholder} />
         <Button
           size="md"
           variant="primary"

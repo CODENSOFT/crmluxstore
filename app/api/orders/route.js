@@ -104,7 +104,7 @@ export const GET = route(async ({ query, user }) => {
         from orders o where ${all}`,
   ]);
   return {
-    items: items.map(({ fullCount, ...o }) => o),
+    items: items.map(({ fullCount: _fullCount, ...o }) => o),
     total: items[0]?.fullCount || 0,
     page,
     limit,

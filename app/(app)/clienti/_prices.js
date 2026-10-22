@@ -4,7 +4,7 @@
 // Comenzile acestui client folosesc automat aceste preturi.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { apiPut } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
 import { useUser, can } from "@/app/_components/user";
@@ -133,7 +133,7 @@ export function PricesEditor({ customer, rows }) {
     >
       <div className="space-y-8">
         <FormSection icon={Plus} title="1. Alegeți produsele" description="Căutați după nume, cod sau scanați codul de bare. Produsele apar în ordinea de aici și la comenzi.">
-          {!products ? <Skeleton className="h-9" /> : <ProductPicker products={products} priceType={customer.priceType} onSelect={add} placeholder="Adaugă un produs pe care clientul îl cumpără des…" autoFocus />}
+          {!products ? <Skeleton className="h-9" /> : <ProductPicker products={products} priceType={customer.priceType} onSelect={add} placeholder="Adaugă un produs pe care clientul îl cumpără des…" focusFirst />}
         </FormSection>
 
         <FormSection icon={Coins} title="2. Stabiliți prețul" description="Scrieți prețul final pentru acest client (cu TVA). Reducerea generală a clientului nu se mai aplică peste el.">
@@ -148,7 +148,9 @@ export function PricesEditor({ customer, rows }) {
                     <th className="px-3 py-2 text-right font-medium">Preț standard</th>
                     <th className="w-[170px] px-3 py-2 text-right font-medium">Preț client</th>
                     <th className="px-3 py-2 text-right font-medium">Diferență</th>
-                    <th className="w-[104px]" />
+                    <th className="w-[104px]">
+                      <span className="sr-only">Acțiuni</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">

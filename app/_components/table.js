@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useRouter } from "next/navigation";
 import { CaretLeft, CaretRight, ArrowUp, ArrowDown } from "./icons";
 import { cx, SkeletonRows, EmptyState, ErrorState } from "./ui";
@@ -43,6 +43,10 @@ export function DataTable({
     if (rowHref) router.push(rowHref(row));
   };
   const clickable = !!(rowHref || onRowClick);
+  // randurile clicabile se pot deschide si de la tastatura (Tab + Enter)
+  const keyOpen = (r) => (e) => {
+    if (e.key === "Enter" && e.target === e.currentTarget) go(r);
+  };
 
   const auto = mobile === undefined && !footer;
   const cell = (c, r, i) => (c.render ? c.render(r, i) : r[c.key] ?? "—");
@@ -84,6 +88,9 @@ export function DataTable({
           {rows.map((r, i) => (
             <div
               key={r[keyField] ?? i}
+              role={clickable ? (rowHref ? "link" : "button") : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              onKeyDown={clickable ? keyOpen(r) : undefined}
               onClick={clickable ? (e) => {
                 // click venit din meniuri/foi deschise din rand (portal) sau pe elemente interactive -> nu deschide randul
                 if (!e.currentTarget.contains(e.target) || e.target.closest("a,button,input,select,label,[data-stop]")) return;
@@ -109,7 +116,14 @@ export function DataTable({
                 {content}
               </Link>
             ) : (
-              <div key={r[keyField] ?? i} className="px-4 py-3" onClick={() => onRowClick?.(r)}>
+              <div
+                key={r[keyField] ?? i}
+                className="px-4 py-3"
+                role={onRowClick ? "button" : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                onKeyDown={onRowClick ? keyOpen(r) : undefined}
+                onClick={() => onRowClick?.(r)}
+              >
                 {content}
               </div>
             );
@@ -155,6 +169,7 @@ export function DataTable({
             {rows.map((r, i) => (
               <tr
                 key={r[keyField] ?? i}
+                {...(clickable ? { tabIndex: 0, onKeyDown: keyOpen(r) } : {})}
                 onClick={clickable ? (e) => {
                   // click venit din meniuri/foi deschise din rand (portal) sau pe elemente interactive -> nu deschide randul
                 if (!e.currentTarget.contains(e.target) || e.target.closest("a,button,input,select,label,[data-stop]")) return;

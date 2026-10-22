@@ -3,7 +3,7 @@
 // Pagina de formular (adaugare / editare) in interiorul aplicatiei: meniul ramane in stanga,
 // formularul se afiseaza ca o pagina normala, cu bara de actiuni fixata jos.
 import { useEffect, useRef } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { cx, Kbd } from "./ui";
 import { ArrowLeft, CheckCircle, WarningCircle } from "./icons";
 

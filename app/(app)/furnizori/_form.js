@@ -2,7 +2,7 @@
 
 // Furnizor: pagina de adaugare / editare si pagina de detalii
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useRouter } from "next/navigation";
 import { apiPatch, apiPost } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
@@ -59,7 +59,7 @@ export function SupplierForm({ supplier, next }) {
       <div className="space-y-8">
         <FormSection icon={Truck} title="Furnizor" description="Denumirea și persoana cu care comunicați pentru comenzi.">
           <Field label="Denumire" required>
-            <Input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="ex: Koch-Chemie Distribuție" />
+            <Input focusFirst value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="ex: Koch-Chemie Distribuție" />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Field label="Persoană de contact"><Input value={f.contactPerson} onChange={(e) => set({ contactPerson: e.target.value })} /></Field>

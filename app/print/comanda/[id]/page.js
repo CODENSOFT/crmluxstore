@@ -131,7 +131,7 @@ function Sheet({ order, s, doc }) {
                 <>
                   <td className="py-2 pr-2">{l.warehouse}</td>
                   <td className="py-2 text-center">
-                    <span className="inline-block h-3.5 w-3.5 border border-[#555]" />
+                    <span aria-hidden className="inline-block h-3.5 w-3.5 border border-[#555]" />
                   </td>
                 </>
               ) : (

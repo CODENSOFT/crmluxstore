@@ -45,5 +45,5 @@ export const GET = route(async ({ query }) => {
   const rows = await sql`
     select ${select}, count(*) over () as full_count from stock_movements m where ${where(conds)}
     order by m.created_at desc, m.seq desc limit ${limit} offset ${skip}`;
-  return { items: rows.map(({ fullCount, ...m }) => m), total: rows[0]?.fullCount || 0, page, limit };
+  return { items: rows.map(({ fullCount: _fullCount, ...m }) => m), total: rows[0]?.fullCount || 0, page, limit };
 });

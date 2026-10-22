@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { cloneElement, createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { X, CheckCircle, WarningCircle, Info, ArrowLeft } from "./icons";
 import { Button, cx, Input, Kbd } from "./ui";
 
@@ -139,6 +139,11 @@ export function ConfirmProvider({ children }) {
     state?.resolve(result);
     setState(null);
   };
+  // la o confirmare simpla, butonul „Confirma” primeste focusul (Enter = confirma)
+  const confirmBtn = useRef(null);
+  useEffect(() => {
+    if (state && !state.input) confirmBtn.current?.focus();
+  }, [state]);
   return (
     <ConfirmCtx.Provider value={confirm}>
       {children}
@@ -156,7 +161,7 @@ export function ConfirmProvider({ children }) {
               variant={state?.tone === "danger" ? "danger" : "primary"}
               disabled={state?.input?.required && !text.trim()}
               onClick={() => close(state?.input ? text : true)}
-              autoFocus={!state?.input}
+              ref={confirmBtn}
             >
               {state?.confirmLabel || "Confirmă"}
             </Button>
@@ -168,7 +173,7 @@ export function ConfirmProvider({ children }) {
           <div className={cx(state?.message && "mt-4")}>
             {state.input.label && <div className="mb-1.5 text-[12.5px] font-medium text-fg-2">{state.input.label}</div>}
             <Input
-              autoFocus
+              focusFirst="always"
               value={text}
               placeholder={state.input.placeholder}
               onChange={(e) => setText(e.target.value)}
@@ -283,6 +288,20 @@ function BottomSheet({ target, panelRef, role, children }) {
   );
 }
 
+// Declansatorul (un buton) primeste direct clicul — accesibil cu tastatura (Enter / Space) si anuntat
+// cititoarelor de ecran ca deschizand un meniu. Clicul nu mai ajunge la parinti (ex: un cartonas clicabil).
+function withToggle(trigger, open, kind, toggle) {
+  return cloneElement(trigger, {
+    "aria-haspopup": kind,
+    "aria-expanded": open,
+    onClick: (e) => {
+      e.stopPropagation();
+      trigger.props.onClick?.(e);
+      toggle(e);
+    },
+  });
+}
+
 /* ---------------- Meniu derulant ---------------- */
 export function Menu({ trigger, items, align = "right", width = "w-56", className }) {
   const [open, setOpen] = useState(false);
@@ -338,15 +357,10 @@ export function Menu({ trigger, items, align = "right", width = "w-56", classNam
   });
   return (
     <div ref={ref} className={cx("relative inline-flex", className)}>
-      <span
-        onClick={(e) => {
-          setTarget(portalTargetOf(e.currentTarget));
-          setOpen((o) => !o);
-        }}
-        className="inline-flex"
-      >
-        {trigger}
-      </span>
+      {withToggle(trigger, open, "menu", (e) => {
+        setTarget(portalTargetOf(e.currentTarget));
+        setOpen((o) => !o);
+      })}
       {open &&
         (small ? (
           <BottomSheet target={target} panelRef={panelRef} role="menu">
@@ -374,15 +388,10 @@ export function Popover({ trigger, children, align = "right", width = "w-80", op
   const content = typeof children === "function" ? children(() => setOpen(false)) : children;
   return (
     <div ref={ref} className="relative inline-flex">
-      <span
-        onClick={(e) => {
-          setTarget(portalTargetOf(e.currentTarget));
-          setOpen(!open);
-        }}
-        className="inline-flex"
-      >
-        {trigger}
-      </span>
+      {withToggle(trigger, open, "dialog", (e) => {
+        setTarget(portalTargetOf(e.currentTarget));
+        setOpen(!open);
+      })}
       {open &&
         (small ? (
           <BottomSheet target={target} panelRef={panelRef} role="dialog">

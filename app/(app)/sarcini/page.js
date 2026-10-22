@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "@/app/_components/link";
 import { apiPatch } from "@/lib/client";
 import { useApi, qs, invalidate } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
@@ -24,7 +25,9 @@ function TaskCard({ t, onOpen, onDragStart, onMove }) {
   // pasul urmator, la un singur click: De facut -> In lucru -> Finalizata
   const next = t.status === "todo" ? { key: "in_progress", label: "Începe", icon: Play } : t.status === "in_progress" ? { key: "done", label: "Finalizează", icon: Check } : null;
   return (
+    // clic oriunde pe cartonas = scurtatura pentru mouse; de la tastatura se foloseste linkul din titlu
     <div
+      role="presentation"
       draggable
       onDragStart={(e) => onDragStart(e, t)}
       onClick={(e) => e.currentTarget.contains(e.target) && onOpen(t)}
@@ -32,7 +35,7 @@ function TaskCard({ t, onOpen, onDragStart, onMove }) {
     >
       <div className="flex items-start gap-2">
         {/* statusul se alege din lista (nu mai sare direct in „Finalizata”) */}
-        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+        <div className="shrink-0">
           <Menu
             align="left"
             width="w-48"
@@ -53,7 +56,12 @@ function TaskCard({ t, onOpen, onDragStart, onMove }) {
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className={cx("text-[13.5px] leading-snug", t.status === "done" ? "text-fg-3 line-through" : "text-fg")}>{t.title}</p>
+          <Link
+            href={`/sarcini/${t._id}`}
+            className={cx("block text-[13.5px] leading-snug focus-visible:underline", t.status === "done" ? "text-fg-3 line-through" : "text-fg")}
+          >
+            {t.title}
+          </Link>
           {t.description && <p className="mt-1 line-clamp-2 text-[12.5px] text-fg-3">{t.description}</p>}
         </div>
       </div>

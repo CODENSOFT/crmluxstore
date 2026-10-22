@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useApi, qs } from "@/lib/useApi";
 import { useQueryState } from "@/lib/useQueryState";
 import { money, moneyShort, num, formatDateTime } from "@/lib/format";

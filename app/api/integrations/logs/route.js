@@ -11,7 +11,7 @@ export const GET = route(
     const rows = await sql`
       select *, count(*) over () as full_count from integration_logs where ${where(conds)}
       order by created_at desc limit ${limit} offset ${skip}`;
-    return { items: rows.map(({ fullCount, ...r }) => r), total: rows[0]?.fullCount || 0, page, limit };
+    return { items: rows.map(({ fullCount: _fullCount, ...r }) => r), total: rows[0]?.fullCount || 0, page, limit };
   },
   { auth: "owner" }
 );

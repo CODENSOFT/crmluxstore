@@ -2,7 +2,7 @@
 
 // Sarcina: pagina de creare si de vizualizare / editare
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { useRouter } from "next/navigation";
 import { apiDelete, apiPatch, apiPost } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
@@ -42,7 +42,8 @@ export function TaskForm({ task, presetCustomer }) {
     setBusy(true);
     try {
       const body = { ...f, dueDate: f.dueDate || null, customer: customer?._id || null };
-      task ? await apiPatch(`/api/tasks/${task._id}`, body) : await apiPost("/api/tasks", body);
+      if (task) await apiPatch(`/api/tasks/${task._id}`, body);
+      else await apiPost("/api/tasks", body);
       toast(task ? "Sarcina a fost actualizată" : "Sarcina a fost creată");
       invalidate("/api/tasks", "/api/me", "/api/dashboard");
       onClose();
@@ -86,7 +87,7 @@ export function TaskForm({ task, presetCustomer }) {
       <div className="space-y-8">
         <FormSection icon={ListChecks} title="Sarcina" description="Ce trebuie făcut, pe scurt, plus detaliile necesare.">
         <Field label="Ce trebuie făcut" required>
-          <Input autoFocus value={f.title || ""} onChange={(e) => set({ title: e.target.value })} disabled={!canEdit} placeholder="ex: Sunați spălătoria AquaWash pentru comanda de chimie" />
+          <Input focusFirst value={f.title || ""} onChange={(e) => set({ title: e.target.value })} disabled={!canEdit} placeholder="ex: Sunați spălătoria AquaWash pentru comanda de chimie" />
         </Field>
         <Field label="Detalii">
           <Textarea rows={5} value={f.description || ""} onChange={(e) => set({ description: e.target.value })} disabled={!canEdit} />

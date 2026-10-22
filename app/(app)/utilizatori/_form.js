@@ -57,7 +57,8 @@ export function UserForm({ u }) {
     try {
       const body = { ...f };
       if (u && !body.password) delete body.password;
-      u ? await apiPatch(`/api/users/${u._id}`, body) : await apiPost("/api/users", body);
+      if (u) await apiPatch(`/api/users/${u._id}`, body);
+      else await apiPost("/api/users", body);
       toast(u ? "Utilizatorul a fost actualizat" : `Contul pentru ${f.name} a fost creat`);
       invalidate("/api/users");
       onClose();
@@ -97,7 +98,7 @@ export function UserForm({ u }) {
       <div className="space-y-8">
         <FormSection icon={UserCircle} title="Cont" description="Date de autentificare și contact. Emailul este numele de utilizator.">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nume" required><Input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} /></Field>
+            <Field label="Nume" required><Input focusFirst value={f.name} onChange={(e) => set({ name: e.target.value })} /></Field>
             <Field label="Email (login)" required><Input type="email" value={f.email} onChange={(e) => set({ email: e.target.value })} /></Field>
             <Field label="Telefon"><Input value={f.phone} onChange={(e) => set({ phone: e.target.value })} inputMode="tel" /></Field>
             <Field label="Funcție"><Input value={f.position} onChange={(e) => set({ position: e.target.value })} placeholder="ex: Vânzări B2B, Depozit" /></Field>

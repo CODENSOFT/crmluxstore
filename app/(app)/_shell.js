@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import Link from "@/app/_components/link";
 import { usePathname, useRouter } from "next/navigation";
 import { apiGet, apiPatch, apiPost } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
@@ -13,7 +13,7 @@ import {
   Truck, Warehouse, CheckSquareOffset, ChartLineUp, Bell, UserGear, PlugsConnected, GearSix,
   MagnifyingGlass, Plus, List, SidebarSimple, SignOut, Moon, Sun, Desktop, UserCircle, X, Drop, CaretRight, Buildings, User, Warning,
 } from "@/app/_components/icons";
-import { Avatar, Kbd, cx, Spinner } from "@/app/_components/ui";
+import { Avatar, Kbd, cx, Spinner, useFocusOnOpen } from "@/app/_components/ui";
 import { Menu, Popover } from "@/app/_components/overlay";
 import { can, isAdminUser } from "@/lib/permissions";
 
@@ -318,8 +318,9 @@ function CommandPalette(props) {
   return props.open ? <PaletteBody {...props} /> : null;
 }
 
-function PaletteBody({ open, onClose, user }) {
+function PaletteBody({ onClose, user }) {
   const router = useRouter();
+  const searchRef = useFocusOnOpen("always"); // utilizatorul tocmai a deschis cautarea
   const [q, setQ] = useState("");
   const [resState, setRes] = useState(null);
   const [active, setActive] = useState(0);
@@ -426,7 +427,7 @@ function PaletteBody({ open, onClose, user }) {
         <div className="flex items-center gap-3 border-b border-line px-4">
           {loading ? <Spinner size={18} /> : <MagnifyingGlass size={18} className="text-fg-3" />}
           <input
-            autoFocus
+            ref={searchRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {

@@ -76,7 +76,7 @@ function QuickCustomerBody({ open, initialName, onClose, onCreated }) {
         />
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={f.type === "company" ? "Denumire companie" : "Nume și prenume"} required className="sm:col-span-2">
-            <Input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder={f.type === "company" ? "SRL AquaWash" : "Ion Popescu"} />
+            <Input focusFirst="always" value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder={f.type === "company" ? "SRL AquaWash" : "Ion Popescu"} />
           </Field>
           <Field label="Telefon">
             <Input value={f.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="+373 6x xxx xxx" inputMode="tel" />
@@ -376,7 +376,7 @@ export default function OrderEditor({ order, template }) {
                 />
               ) : (
                 <CustomerPicker
-                  autoFocus={!editing}
+                  focusFirst={!editing}
                   onSelect={(c) => {
                     selectCustomer(c);
                     setTimeout(() => productInput.current?.focus(), 50);
@@ -500,13 +500,14 @@ export default function OrderEditor({ order, template }) {
                           </div>
                           <IconButton icon={Trash} label="Elimină linia" size="sm" variant="danger-ghost" onClick={() => remove(r.key)} className="@2xl:hidden" />
                         </div>
-                        <label className="block">
+                        <label className="block" htmlFor={`ln-qty-${r.key}`}>
                           <span className={lbl}>Cantitate</span>
-                          <NumberInput value={r.quantity} onChange={(v) => update(r.key, { quantity: v })} className="text-right" aria-label="Cantitate" invalid={!(r.qty > 0)} />
+                          <NumberInput id={`ln-qty-${r.key}`} value={r.quantity} onChange={(v) => update(r.key, { quantity: v })} className="text-right" aria-label="Cantitate" invalid={!(r.qty > 0)} />
                         </label>
-                        <label className="block">
+                        <label className="block" htmlFor={`ln-price-${r.key}`}>
                           <span className={lbl}>Preț unitar</span>
                           <NumberInput
+                            id={`ln-price-${r.key}`}
                             value={r.unitPrice}
                             onChange={(v) => update(r.key, { unitPrice: v })}
                             placeholder={num(r.base, 2)}
@@ -516,9 +517,9 @@ export default function OrderEditor({ order, template }) {
                             title={allowPriceEdit ? "Lăsați gol pentru prețul din catalog" : "Prețul este cel din catalog"}
                           />
                         </label>
-                        <label className="block">
+                        <label className="block" htmlFor={`ln-disc-${r.key}`}>
                           <span className={lbl}>Reducere %</span>
-                          <NumberInput value={r.discount} onChange={(v) => update(r.key, { discount: v, discountTouched: true })} className="text-right" aria-label="Reducere %" />
+                          <NumberInput id={`ln-disc-${r.key}`} value={r.discount} onChange={(v) => update(r.key, { discount: v, discountTouched: true })} className="text-right" aria-label="Reducere %" />
                         </label>
                         <div className="tnum col-span-3 flex items-baseline justify-end gap-2 text-right text-[13.5px] font-medium text-fg @2xl:col-span-1 @2xl:block">
                           {r.disc > 0 && <span className="text-[11.5px] font-normal text-fg-4 line-through @2xl:block">{money(r.qty * r.price)}</span>}
