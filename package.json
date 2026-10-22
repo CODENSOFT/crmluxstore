@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
+    "@vercel/functions": "3.9.11",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.3",
     "next": "16.2.7",
