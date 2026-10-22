@@ -1,6 +1,6 @@
 import { db, isUuid } from "@/lib/db";
 import { USER_COLS } from "@/lib/users";
-import { hashPassword } from "@/lib/auth";
+import { hashPassword, forgetSessionUser } from "@/lib/auth";
 import { route, readJson, badRequest, notFound, forbidden } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 import { cleanPermissions, isAdminUser, isOwner } from "@/lib/permissions";
@@ -64,6 +64,7 @@ export const PATCH = route(
       patch.email = email;
     }
     if (Object.keys(patch).length) await sql`update users set ${sql(patch, ...Object.keys(patch))} where id = ${target._id}`;
+    forgetSessionUser(target._id);
     const [fresh] = await sql`select ${sql.unsafe(USER_COLS)} from users where id = ${target._id}`;
     await logAudit({
       action: "user_edited",
@@ -85,6 +86,7 @@ export const DELETE = route(
     if (target.role === "owner") throw badRequest("Administratorul principal nu poate fi șters");
     assertCanManage(user, target);
     await db()`delete from users where id = ${target._id}`;
+    forgetSessionUser(target._id);
     await logAudit({ action: "user_deleted", category: "user", entityName: target.name, user });
     return { deleted: true };
   },
