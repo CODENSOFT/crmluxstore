@@ -172,7 +172,7 @@ function InventoryView({ inv, reload }) {
           />
         </Toolbar>
         <div className="overflow-x-auto">
-          <table className="w-full text-[13.5px]">
+          <table className="stack-sm w-full text-[13.5px]">
             <thead>
               <tr className="border-b border-line bg-surface-2/60 text-left text-[12px] text-fg-3">
                 <th className="px-5 py-2 font-medium">Produs</th>
@@ -188,10 +188,10 @@ function InventoryView({ inv, reload }) {
                     <div className="font-medium text-fg">{l.productName}</div>
                     <div className="text-[12px] text-fg-3">{[l.sku, l.barcode].filter(Boolean).join(" · ")}</div>
                   </td>
-                  <td className="tnum whitespace-nowrap px-3 py-2.5 text-right text-fg-2">
+                  <td data-label="În sistem" className="tnum whitespace-nowrap px-3 py-2.5 text-right text-fg-2">
                     {num(l.base)} {UNIT_LABELS[l.unit]}
                   </td>
-                  <td className="px-3 py-2">
+                  <td data-label="Numărat" className="px-3 py-2">
                     {draft ? (
                       <NumberInput
                         value={counts[String(l.product)] ?? ""}
@@ -207,7 +207,7 @@ function InventoryView({ inv, reload }) {
                       <div className="tnum text-right text-fg">{l.counted == null ? "—" : num(l.counted)}</div>
                     )}
                   </td>
-                  <td className={cx("tnum whitespace-nowrap px-5 py-2.5 text-right font-medium", l.diff > 0 ? "text-ok" : l.diff < 0 ? "text-bad" : "text-fg-4")}>
+                  <td data-label="Diferență" className={cx("tnum whitespace-nowrap px-5 py-2.5 text-right font-medium", l.diff > 0 ? "text-ok" : l.diff < 0 ? "text-bad" : "text-fg-4")}>
                     {l.diff == null ? "—" : `${l.diff > 0 ? "+" : ""}${num(l.diff)}`}
                   </td>
                 </tr>

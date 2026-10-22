@@ -141,7 +141,7 @@ export function PricesEditor({ customer, rows }) {
             <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-[13px] text-fg-3">Încă nu ați adăugat produse.</p>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-line">
-              <table className="w-full min-w-[620px] text-[13px]">
+              <table className="stack-sm w-full min-w-[620px] text-[13px]">
                 <thead className="bg-surface-2/60 text-left text-[12px] text-fg-3">
                   <tr>
                     <th className="px-3 py-2 font-medium">Produs</th>
@@ -163,12 +163,12 @@ export function PricesEditor({ customer, rows }) {
                           <div className="font-medium text-fg">{x.name}</div>
                           <div className="text-[12px] text-fg-3">{x.sku || "fără cod"}</div>
                         </td>
-                        <td className="tnum px-3 py-2 text-right text-fg-3">{money(std)}</td>
-                        <td className="px-3 py-2">
+                        <td data-label="Preț standard" className="tnum px-3 py-2 text-right text-fg-3">{money(std)}</td>
+                        <td data-label="Preț client" className="px-3 py-2">
                           <NumberInput value={x.price} onChange={(v) => set(i, { price: v })} suffix="MDL" className="text-right" aria-label={`Preț pentru ${x.name}`} />
                           {belowCost && <div className="mt-1 text-right text-[11.5px] font-medium text-bad">sub prețul de achiziție</div>}
                         </td>
-                        <td className={cx("tnum px-3 py-2 text-right font-medium", diff == null ? "text-fg-4" : diff < 0 ? "text-ok" : diff > 0 ? "text-warn" : "text-fg-3")}>
+                        <td data-label="Diferență" className={cx("tnum px-3 py-2 text-right font-medium", diff == null ? "text-fg-4" : diff < 0 ? "text-ok" : diff > 0 ? "text-warn" : "text-fg-3")}>
                           {diff == null ? "—" : `${diff > 0 ? "+" : ""}${pct(diff)}`}
                         </td>
                         <td className="px-2 py-2">

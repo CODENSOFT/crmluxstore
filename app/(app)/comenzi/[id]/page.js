@@ -31,29 +31,80 @@ function Stepper({ status }) {
   const idx = ORDER_STAGES.findIndex((s) => s.key === status);
   if (idx < 0) return null;
   return (
-    <ol className="flex items-center gap-1 overflow-x-auto pb-1">
-      {ORDER_STAGES.map((s, i) => {
-        const done = i < idx;
-        const cur = i === idx;
-        return (
-          <li key={s.key} className="flex min-w-0 flex-1 items-center gap-1">
-            <div className="flex min-w-[96px] flex-1 flex-col gap-1.5">
+    <div>
+      <ol className="flex items-start gap-1">
+        {ORDER_STAGES.map((s, i) => {
+          const done = i < idx;
+          const cur = i === idx;
+          return (
+            <li key={s.key} className="flex min-w-0 flex-1 flex-col gap-1.5">
               <div className={cx("h-1.5 rounded-full", done ? "bg-accent" : cur ? "bg-accent/60" : "bg-surface-3")} />
-              <span className={cx("flex items-center gap-1 truncate text-[12px]", cur ? "font-semibold text-fg" : done ? "text-fg-2" : "text-fg-4")}>
-                {done && <Check size={12} weight="bold" className="text-accent" />}
+              {/* pe telefon etichetele nu incap una langa alta — se arata doar etapa curenta, dedesubt */}
+              <span className={cx("hidden items-center gap-1 truncate text-[12px] sm:flex", cur ? "font-semibold text-fg" : done ? "text-fg-2" : "text-fg-4")}>
+                {done && <Check size={12} weight="bold" className="shrink-0 text-accent" />}
                 {s.short}
               </span>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-2 text-[12.5px] text-fg-3 sm:hidden">
+        {`Etapa ${idx + 1} din ${ORDER_STAGES.length}:`} <span className="font-semibold text-fg">{ORDER_STAGES[idx].label || ORDER_STAGES[idx].short}</span>
+      </p>
+    </div>
+  );
+}
+
+function OrderTotals({ order }) {
+  return (
+    <dl className="tnum space-y-1 border-t border-line px-4 pb-4 pt-3 text-[13.5px]">
+      <div className="flex justify-between gap-3">
+        <dt className="text-fg-3">Subtotal</dt>
+        <dd className="text-fg-2">{money(order.subtotal ?? order.total)}</dd>
+      </div>
+      <div className="flex justify-between gap-3">
+        <dt className="min-w-0 text-fg-3">Livrare {order.delivery?.label ? `· ${order.delivery.label}` : ""}</dt>
+        <dd className="shrink-0 text-fg-2">{order.delivery?.cost ? money(order.delivery.cost) : "gratuit"}</dd>
+      </div>
+      {order.vatTotal > 0 && (
+        <div className="flex justify-between gap-3">
+          <dt className="text-fg-3">din care TVA</dt>
+          <dd className="text-fg-3">{money(order.vatTotal)}</dd>
+        </div>
+      )}
+      <div className="flex items-baseline justify-between gap-3 pt-1.5">
+        <dt className="font-semibold text-fg">Total</dt>
+        <dd className="text-[17px] font-semibold text-fg">{money(order.total)}</dd>
+      </div>
+    </dl>
   );
 }
 
 function ItemsTable({ items, order, compare }) {
   return (
-    <div className="overflow-x-auto">
+    <>
+      {/* Telefon: fiecare produs pe un rand compact, totalurile pe toata latimea */}
+      <div className="sm:hidden">
+        <ul className="divide-y divide-line border-y border-line">
+          {items.map((it, i) => (
+            <li key={i} className={cx("px-4 py-3", compare && "bg-warn-soft/30")}>
+              <Link href={`/produse/${it.product?._id || it.product}`} className="block break-words text-[14px] font-medium text-fg">
+                {it.productName}
+              </Link>
+              {(it.sku || it.warehouse?.name) && <div className="text-[12px] text-fg-3">{[it.sku, it.warehouse?.name].filter(Boolean).join(" · ")}</div>}
+              <div className="tnum mt-1.5 flex items-baseline justify-between gap-3 text-[13px]">
+                <span className="text-fg-2">
+                  {num(it.quantity)} {UNIT_LABELS[it.unit] || ""} × {money(it.unitPrice)}
+                  {it.discount ? <span className="text-fg-3"> · −{num(it.discount)}%</span> : null}
+                </span>
+                <span className="shrink-0 font-semibold text-fg">{money(it.lineTotal)}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+        {order && <OrderTotals order={order} />}
+      </div>
+    <div className="hidden overflow-x-auto sm:block">
       <table className="w-full text-[13.5px]">
         <thead>
           <tr className="border-y border-line bg-surface-2/60 text-[12px] text-fg-3">
@@ -116,6 +167,7 @@ function ItemsTable({ items, order, compare }) {
         )}
       </table>
     </div>
+    </>
   );
 }
 

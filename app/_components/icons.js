@@ -116,6 +116,7 @@ export {
   Sparkle,
   Circle,
   Timer,
+  Play,
   Pulse,
   ListChecks,
   ArrowSquareOut,

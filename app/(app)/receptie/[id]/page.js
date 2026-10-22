@@ -28,7 +28,7 @@ export default function ArrivalPage({ params }) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card className="overflow-hidden">
           <CardHeader title={`Produse (${d.items.length})`} icon={Package} />
-          <table className="w-full text-[13.5px]">
+          <table className="stack-sm w-full text-[13.5px]">
             <thead>
               <tr className="border-y border-line bg-surface-2/60 text-left text-[12px] text-fg-3">
                 <th className="px-5 py-2 font-medium">Produs</th>
@@ -46,11 +46,11 @@ export default function ArrivalPage({ params }) {
                     </Link>
                     {l.sku && <div className="text-[12px] text-fg-3">{l.sku}</div>}
                   </td>
-                  <td className="tnum px-3 py-3 text-right text-fg-2">
+                  <td data-label="Cantitate" className="tnum px-3 py-3 text-right text-fg-2">
                     {num(l.quantity)} {UNIT_LABELS[l.unit || l.product?.unit] || ""}
                   </td>
-                  <td className="tnum px-3 py-3 text-right text-fg-2">{l.unitCost != null ? money(l.unitCost) : "—"}</td>
-                  <td className="tnum px-5 py-3 text-right font-medium text-fg">{l.unitCost ? money(l.unitCost * l.quantity) : "—"}</td>
+                  <td data-label="Preț achiziție" className="tnum px-3 py-3 text-right text-fg-2">{l.unitCost != null ? money(l.unitCost) : "—"}</td>
+                  <td data-label="Valoare" className="tnum px-5 py-3 text-right font-medium text-fg">{l.unitCost ? money(l.unitCost * l.quantity) : "—"}</td>
                 </tr>
               ))}
             </tbody>

@@ -308,7 +308,8 @@ export function Switch({ checked, onChange, label, description, disabled, classN
 // Selector segmentat (2–5 optiuni)
 export function Segmented({ options, value, onChange, size = "md", className }) {
   return (
-    <div className={cx("inline-flex rounded-lg bg-surface-2 p-0.5 ring-1 ring-inset ring-line", className)}>
+    // pe telefon, cu multe optiuni (ex: perioadele din rapoarte) butoanele trec pe randul urmator in loc sa iasa din ecran
+    <div className={cx("inline-flex max-w-full overflow-x-auto rounded-lg bg-surface-2 p-0.5 ring-1 ring-inset ring-line [scrollbar-width:none]", options.length > 3 && "max-sm:flex-wrap", className)}>
       {options.map((o) => {
         const active = o.value === value;
         const IconC = o.icon;
@@ -318,7 +319,7 @@ export function Segmented({ options, value, onChange, size = "md", className }) 
             type="button"
             onClick={() => onChange(o.value)}
             className={cx(
-              "inline-flex items-center gap-1.5 rounded-md font-medium transition-all",
+              "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-all",
               size === "sm" ? "h-7 px-2.5 text-[12.5px]" : "h-8 px-3 text-[13px]",
               active ? "bg-surface text-fg shadow-sm" : "text-fg-3 hover:text-fg"
             )}

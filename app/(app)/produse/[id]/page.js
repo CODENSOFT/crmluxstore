@@ -205,7 +205,7 @@ export default function ProductPage({ params }) {
             {mov?.items?.length ? (
               <>
                 <div className="overflow-x-auto border-t border-line">
-                  <table className="w-full text-[13px]">
+                  <table className="stack-sm w-full text-[13px]">
                     <thead>
                       <tr className="bg-surface-2/60 text-left text-[12px] text-fg-3">
                         <th className="px-5 py-2 font-medium">Data</th>
@@ -223,16 +223,16 @@ export default function ProductPage({ params }) {
                         return (
                           <tr key={m._id}>
                             <td className="whitespace-nowrap px-5 py-2.5 text-fg-3">{formatDateTime(m.createdAt)}</td>
-                            <td className="px-3 py-2.5">
+                            <td data-label="Operațiune" className="px-3 py-2.5">
                               <Badge tone={t?.tone}>{t?.label || m.type}</Badge>
                             </td>
-                            <td className="px-3 py-2.5 text-fg-2">{m.warehouse?.name || "—"}</td>
-                            <td className={cx("tnum whitespace-nowrap px-3 py-2.5 text-right font-medium", m.quantity > 0 ? "text-ok" : "text-bad")}>
+                            <td data-label="Depozit" className="px-3 py-2.5 text-fg-2">{m.warehouse?.name || "—"}</td>
+                            <td data-label="Cantitate" className={cx("tnum whitespace-nowrap px-3 py-2.5 text-right font-medium", m.quantity > 0 ? "text-ok" : "text-bad")}>
                               {m.quantity > 0 ? "+" : ""}
                               {num(m.quantity)}
                             </td>
-                            <td className="tnum px-3 py-2.5 text-right text-fg-2">{m.balanceAfter != null ? num(m.balanceAfter) : "—"}</td>
-                            <td className="px-5 py-2.5 text-[12.5px]">
+                            <td data-label="Sold" className="tnum px-3 py-2.5 text-right text-fg-2">{m.balanceAfter != null ? num(m.balanceAfter) : "—"}</td>
+                            <td data-label="Document" className="px-5 py-2.5 text-[12.5px]">
                               {href ? (
                                 <Link href={href} className="font-medium text-accent hover:underline">
                                   {m.refNumber || "deschide"}

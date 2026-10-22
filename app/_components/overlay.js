@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { X, CheckCircle, WarningCircle, Info, ArrowLeft } from "./icons";
 import { Button, cx, Input, Kbd } from "./ui";
@@ -186,96 +187,26 @@ export function useConfirm() {
   return useContext(ConfirmCtx) || (async (o) => window.confirm(o.message || o.title));
 }
 
-/* ---------------- Meniu derulant ---------------- */
-export function Menu({ trigger, items, align = "right", width = "w-56", className }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  return (
-    <div ref={ref} className={cx("relative inline-flex", className)}>
-      <span onClick={() => setOpen((o) => !o)} className="inline-flex">
-        {trigger}
-      </span>
-      {open && (
-        <div
-          role="menu"
-          className={cx(
-            "absolute top-full z-50 mt-1.5 animate-pop overflow-hidden rounded-xl border border-line bg-surface p-1 shadow-lg",
-            width,
-            align === "right" ? "right-0" : "left-0"
-          )}
-        >
-          {items.filter(Boolean).map((it, i) => {
-            if (it.divider) return <div key={i} className="my-1 h-px bg-line" />;
-            if (it.header) return <div key={i} className="px-2.5 pb-1 pt-1.5 text-[11.5px] font-medium text-fg-3">{it.header}</div>;
-            const IconC = it.icon;
-            const cls = cx(
-              "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors disabled:opacity-40",
-              it.danger ? "text-bad hover:bg-bad-soft" : "text-fg-2 hover:bg-surface-2 hover:text-fg",
-              it.active && "bg-surface-2 text-fg"
-            );
-            const content = (
-              <>
-                {IconC && <IconC size={16} className="shrink-0" />}
-                <span className="min-w-0 flex-1 truncate">{it.label}</span>
-                {it.hint && <span className="text-[11.5px] text-fg-4">{it.hint}</span>}
-              </>
-            );
-            if (it.href && (it.download || it.external)) {
-              return (
-                <a key={i} href={it.href} className={cls} onClick={() => setOpen(false)} target={it.external ? "_blank" : undefined} rel="noreferrer" download={it.download ? "" : undefined}>
-                  {content}
-                </a>
-              );
-            }
-            return it.href ? (
-              <Link key={i} href={it.href} className={cls} onClick={() => setOpen(false)}>
-                {content}
-              </Link>
-            ) : (
-              <button
-                key={i}
-                type="button"
-                role="menuitem"
-                disabled={it.disabled}
-                className={cls}
-                onClick={() => {
-                  setOpen(false);
-                  it.onClick?.();
-                }}
-              >
-                {content}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+/* ---------------- Telefon: foaie care urca de jos ---------------- */
+// Pe ecrane mici meniurile si ferestrele mici nu se mai deschid langa buton (ieseau din ecran /
+// erau taiate de bara de sus), ci ca o foaie pe toata latimea, in partea de jos — usor de atins cu degetul.
+const SMALL_QUERY = "(max-width: 639px)";
+function subscribeSmall(cb) {
+  const mq = window.matchMedia(SMALL_QUERY);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+export function useSmallScreen() {
+  return useSyncExternalStore(subscribeSmall, () => window.matchMedia(SMALL_QUERY).matches, () => false);
 }
 
-/* ---------------- Popover generic ---------------- */
-export function Popover({ trigger, children, align = "right", width = "w-80", open: controlled, onOpenChange }) {
-  const [inner, setInner] = useState(false);
-  const open = controlled ?? inner;
-  const setOpen = (v) => (onOpenChange ? onOpenChange(v) : setInner(v));
-  const ref = useRef(null);
+// Inchide la click in afara declansatorului si a panoului (panoul poate fi intr-un portal) + Escape
+function useDismiss(open, setOpen, refs) {
   useEffect(() => {
     if (!open) return;
     const onDoc = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (refs.some((r) => r.current?.contains(e.target))) return;
+      setOpen(false);
     };
     const onKey = (e) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDoc);
@@ -285,22 +216,183 @@ export function Popover({ trigger, children, align = "right", width = "w-80", op
       document.removeEventListener("keydown", onKey);
     };
   });
+}
+
+// Unde se randeaza panoul: intr-un <dialog> deschis (stratul de sus) daca declansatorul e in el, altfel in body.
+// Se afla la click (nu in timpul randarii).
+const portalTargetOf = (el) => el?.closest("dialog") || document.body;
+
+// Calculator: panoul se pune deasupra paginii (position: fixed, prin portal), langa buton.
+// Astfel nu mai e taiat de containere cu derulare (tabele) sau cu overflow-hidden (cartonase);
+// se intoarce in sus daca nu incape dedesubt si nu iese din ecran in lateral.
+function AnchoredPanel({ anchorRef, panelRef, target, align, className, role, children }) {
+  useLayoutEffect(() => {
+    const place = () => {
+      const a = anchorRef.current?.getBoundingClientRect();
+      const p = panelRef.current;
+      if (!a || !p) return;
+      const h = p.offsetHeight;
+      const w = p.offsetWidth;
+      let top = a.bottom + 6;
+      if (top + h > window.innerHeight - 8 && a.top - 6 - h > 8) top = a.top - 6 - h;
+      let left = align === "right" ? a.right - w : a.left;
+      left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+      p.style.top = `${Math.round(top)}px`;
+      p.style.left = `${Math.round(left)}px`;
+      p.style.visibility = "visible";
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [anchorRef, panelRef, align]);
+  return createPortal(
+    <div ref={panelRef} role={role} style={{ position: "fixed", top: 0, left: 0, visibility: "hidden" }} className={cx("z-[60] max-w-[calc(100vw-1rem)] animate-pop", className)}>
+      {children}
+    </div>,
+    target || document.body
+  );
+}
+
+function BottomSheet({ target, panelRef, role, children }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+  return createPortal(
+    <div className="fixed inset-0 z-[70]">
+      <div className="absolute inset-0 animate-fade bg-black/45" aria-hidden />
+      <div
+        ref={panelRef}
+        role={role}
+        className="absolute inset-x-0 bottom-0 max-h-[85dvh] animate-sheet overflow-y-auto overscroll-contain rounded-t-2xl border-t border-line bg-surface pb-[max(env(safe-area-inset-bottom),0.5rem)] shadow-lg"
+      >
+        <div className="sticky top-0 z-10 flex justify-center bg-surface pb-1 pt-2.5" aria-hidden>
+          <span className="h-1 w-10 rounded-full bg-line-strong" />
+        </div>
+        {children}
+      </div>
+    </div>,
+    target || document.body
+  );
+}
+
+/* ---------------- Meniu derulant ---------------- */
+export function Menu({ trigger, items, align = "right", width = "w-56", className }) {
+  const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState(null);
+  const ref = useRef(null);
+  const panelRef = useRef(null);
+  const small = useSmallScreen();
+  useDismiss(open, setOpen, [ref, panelRef]);
+  const list = items.filter(Boolean);
+  const body = list.map((it, i) => {
+    if (it.divider) return <div key={i} className="my-1 h-px bg-line" />;
+    if (it.header) return <div key={i} className={cx("px-2.5 pb-1 pt-1.5 font-medium text-fg-3", small ? "text-[12.5px]" : "text-[11.5px]")}>{it.header}</div>;
+    const IconC = it.icon;
+    const cls = cx(
+      "flex w-full items-center rounded-lg text-left transition-colors disabled:opacity-40",
+      small ? "gap-3 px-3 py-3 text-[15px]" : "gap-2.5 px-2.5 py-2 text-[13px]",
+      it.danger ? "text-bad hover:bg-bad-soft" : "text-fg-2 hover:bg-surface-2 hover:text-fg",
+      it.active && "bg-surface-2 text-fg"
+    );
+    const content = (
+      <>
+        {IconC && <IconC size={small ? 19 : 16} className="shrink-0" />}
+        <span className="min-w-0 flex-1 truncate">{it.label}</span>
+        {it.hint && !small && <span className="text-[11.5px] text-fg-4">{it.hint}</span>}
+      </>
+    );
+    if (it.href && (it.download || it.external)) {
+      return (
+        <a key={i} href={it.href} className={cls} onClick={() => setOpen(false)} target={it.external ? "_blank" : undefined} rel="noreferrer" download={it.download ? "" : undefined}>
+          {content}
+        </a>
+      );
+    }
+    return it.href ? (
+      <Link key={i} href={it.href} className={cls} onClick={() => setOpen(false)}>
+        {content}
+      </Link>
+    ) : (
+      <button
+        key={i}
+        type="button"
+        role="menuitem"
+        disabled={it.disabled}
+        className={cls}
+        onClick={() => {
+          setOpen(false);
+          it.onClick?.();
+        }}
+      >
+        {content}
+      </button>
+    );
+  });
   return (
-    <div ref={ref} className="relative inline-flex">
-      <span onClick={() => setOpen(!open)} className="inline-flex">
+    <div ref={ref} className={cx("relative inline-flex", className)}>
+      <span
+        onClick={(e) => {
+          setTarget(portalTargetOf(e.currentTarget));
+          setOpen((o) => !o);
+        }}
+        className="inline-flex"
+      >
         {trigger}
       </span>
-      {open && (
-        <div
-          className={cx(
-            "absolute top-full z-50 mt-1.5 animate-pop rounded-xl border border-line bg-surface shadow-lg",
-            width,
-            align === "right" ? "right-0" : "left-0"
-          )}
-        >
-          {typeof children === "function" ? children(() => setOpen(false)) : children}
-        </div>
-      )}
+      {open &&
+        (small ? (
+          <BottomSheet target={target} panelRef={panelRef} role="menu">
+            <div className="px-2 pb-2">{body}</div>
+          </BottomSheet>
+        ) : (
+          <AnchoredPanel anchorRef={ref} panelRef={panelRef} target={target} align={align} role="menu" className={cx("max-h-[min(70vh,520px)] overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-lg", width)}>
+            {body}
+          </AnchoredPanel>
+        ))}
+    </div>
+  );
+}
+
+/* ---------------- Popover generic ---------------- */
+export function Popover({ trigger, children, align = "right", width = "w-80", open: controlled, onOpenChange }) {
+  const [inner, setInner] = useState(false);
+  const open = controlled ?? inner;
+  const setOpen = (v) => (onOpenChange ? onOpenChange(v) : setInner(v));
+  const [target, setTarget] = useState(null);
+  const ref = useRef(null);
+  const panelRef = useRef(null);
+  const small = useSmallScreen();
+  useDismiss(open, setOpen, [ref, panelRef]);
+  const content = typeof children === "function" ? children(() => setOpen(false)) : children;
+  return (
+    <div ref={ref} className="relative inline-flex">
+      <span
+        onClick={(e) => {
+          setTarget(portalTargetOf(e.currentTarget));
+          setOpen(!open);
+        }}
+        className="inline-flex"
+      >
+        {trigger}
+      </span>
+      {open &&
+        (small ? (
+          <BottomSheet target={target} panelRef={panelRef} role="dialog">
+            {content}
+          </BottomSheet>
+        ) : (
+          <AnchoredPanel anchorRef={ref} panelRef={panelRef} target={target} align={align} role="dialog" className={cx("rounded-xl border border-line bg-surface shadow-lg", width)}>
+            {content}
+          </AnchoredPanel>
+        ))}
     </div>
   );
 }

@@ -16,7 +16,7 @@ export function tr(lang, text) {
   return (t && t(text)) || text;
 }
 
-const ATTRS = ["placeholder", "title", "aria-label", "alt"];
+const ATTRS = ["placeholder", "title", "aria-label", "alt", "data-label"];
 // Elemente netraduse; in plus, textul din <textarea> (valoarea scrisa de utilizator) nu se atinge
 const SKIP = "[data-no-translate],script,style,code,pre,[contenteditable=true]";
 const SKIP_TEXT = `${SKIP},textarea`;

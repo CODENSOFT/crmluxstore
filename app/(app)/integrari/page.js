@@ -514,15 +514,15 @@ function OneCTab({ go }) {
         </Card>
         <Card className="overflow-hidden">
           <CardHeader title="Endpoint-uri pentru 1C" description={`Adresa de bază: ${o.baseUrl}/api/v1 · antet: X-API-Key`} icon={Code} />
-          <table className="w-full border-t border-line text-[13px]">
+          <table className="stack-sm w-full border-t border-line text-[13px]">
             <tbody className="divide-y divide-line">
               {ENDPOINTS.map(([m, p, d]) => (
                 <tr key={m + p}>
                   <td className="w-20 px-5 py-2.5">
                     <Badge tone={m === "GET" ? "info" : m === "POST" ? "ok" : "warn"}>{m}</Badge>
                   </td>
-                  <td className="px-2 py-2.5 font-mono text-[12.5px] text-fg">{p}</td>
-                  <td className="px-5 py-2.5 text-fg-3">{d}</td>
+                  <td className="stack-left break-all px-2 py-2.5 font-mono text-[12.5px] text-fg">{p}</td>
+                  <td className="stack-left px-5 py-2.5 text-fg-3">{d}</td>
                 </tr>
               ))}
             </tbody>

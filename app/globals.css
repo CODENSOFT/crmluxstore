@@ -177,6 +177,8 @@
   --animate-in: fade-up 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
   --animate-pop: pop 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
   --animate-slide: slide-in 0.26s cubic-bezier(0.22, 0.9, 0.24, 1);
+  --animate-sheet: sheet-up 0.24s cubic-bezier(0.22, 0.9, 0.24, 1);
+  --animate-fade: fade 0.18s ease-out;
 }
 
 *,
@@ -259,6 +261,71 @@ textarea:focus-visible {
   background: transparent;
 }
 
+/* Elementele din grile se pot micsora sub latimea textului din ele (altfel un rand lung — un titlu,
+   un tabel — latea coloana si pagina iesea din ecran pe telefon). :where = fara specificitate,
+   deci o clasa min-w-* explicita are prioritate. */
+@layer base {
+  :where(.grid) > * {
+    min-width: 0;
+  }
+}
+
+/* Tabele scrise direct in pagini: pe telefon fiecare rand devine un cartonas.
+   Prima celula = titlul randului; celelalte primesc in fata eticheta din data-label
+   (tradusa automat), valoarea ramane la dreapta. Clasa „stack-left” = celula aliniata la stanga.
+   In afara straturilor Tailwind ca sa aiba prioritate fata de px-5 / min-w-[…] din tabel. */
+@media (max-width: 639px) {
+  table.stack-sm,
+  .stack-sm > tbody,
+  .stack-sm > tfoot {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  .stack-sm > thead {
+    display: none;
+  }
+  .stack-sm > tbody > tr {
+    display: block;
+    padding: 0.75rem 1rem;
+  }
+  .stack-sm > tbody > tr > td {
+    display: flow-root;
+    width: auto;
+    max-width: none;
+    padding: 0.2rem 0;
+    text-align: right;
+  }
+  .stack-sm > tbody > tr > td:first-child,
+  .stack-sm > tbody > tr > td.stack-left {
+    text-align: left;
+  }
+  .stack-sm > tbody > tr > td:first-child {
+    padding: 0 0 0.35rem;
+  }
+  .stack-sm > tbody > tr > td:empty {
+    display: none;
+  }
+  .stack-sm > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    float: left;
+    margin-right: 1rem;
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--fg-3);
+  }
+  .stack-sm > tfoot > tr {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+  }
+  .stack-sm > tfoot > tr > td {
+    padding: 0;
+  }
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -289,6 +356,24 @@ textarea:focus-visible {
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
