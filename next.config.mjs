@@ -8,6 +8,9 @@ const nextConfig = {
   },
   experimental: {
     optimizePackageImports: ["@phosphor-icons/react"],
+    // Paginile vizitate raman 5 minute in memoria browserului: la revenire nu se mai asteapta serverul.
+    // Sigur pentru CRM: toate paginile isi iau datele din API (useApi), care se reimprospateaza oricum.
+    staleTimes: { dynamic: 300, static: 300 },
   },
   poweredByHeader: false,
   // Adrese vechi -> noi (linkuri salvate de echipa)
