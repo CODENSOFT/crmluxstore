@@ -1,0 +1,14 @@
+# Tine serverul site-ului „cald”: fara cereri cateva minute, Vercel il opreste, iar prima deschidere
+# a unei pagini dureaza ~1 s in plus. Ruleaza la 5 minute in orele de lucru (ora Moldovei ~08:00–23:00).
+name: Server cald
+on:
+  schedule:
+    - cron: "*/5 5-20 * * *" # UTC
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Atinge site-ul (si conexiunea la baza de date)
+        run: curl -s -o /dev/null -w "%{http_code} in %{time_total}s\n" --max-time 30 https://crmluxstore.vercel.app/api/health

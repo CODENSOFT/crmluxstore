@@ -5,10 +5,27 @@
 // inclusiv ferestrele, notificarile si mesajele de eroare venite de la server.
 import { useLayoutEffect, useSyncExternalStore } from "react";
 import { createTranslator } from "@/lib/i18n/runtime";
-import { RU } from "@/lib/i18n/ru";
 
+// Dictionarul rus (~150 KB) se descarca doar pentru utilizatorii cu limba rusa, nu la toti.
 let ruTranslator = null;
-const translatorFor = (lang) => (lang === "ru" ? (ruTranslator ||= createTranslator(RU)) : null);
+let ruLoading = null;
+const ruSubs = new Set();
+function loadRu() {
+  if (ruTranslator || ruLoading) return;
+  ruLoading = import("@/lib/i18n/ru")
+    .then((m) => {
+      ruTranslator = createTranslator(m.RU);
+      for (const cb of ruSubs) cb();
+    })
+    .catch(() => {
+      ruLoading = null; // se reincearca la urmatoarea afisare
+    });
+}
+const subscribeRu = (cb) => {
+  ruSubs.add(cb);
+  return () => ruSubs.delete(cb);
+};
+const translatorFor = (lang) => (lang === "ru" ? ruTranslator : null);
 
 /** Traducere punctuala in cod (ex: texte din confirm/alert). */
 export function tr(lang, text) {
@@ -79,10 +96,15 @@ function install(lang) {
 const noop = () => () => {};
 export function LanguageProvider({ lang, children }) {
   const isClient = useSyncExternalStore(noop, () => true, () => false);
+  const ruReady = useSyncExternalStore(subscribeRu, () => !!ruTranslator, () => false);
+  useLayoutEffect(() => {
+    if (lang === "ru") loadRu();
+  }, [lang]);
   useLayoutEffect(() => {
     document.documentElement.lang = lang === "ru" ? "ru" : "ro";
     return install(lang);
-  }, [lang]);
-  if (lang === "ru" && !isClient) return null;
+  }, [lang, ruReady]);
+  // rusa: se afiseaza dupa ce dictionarul e incarcat (fara clipire romana -> rusa)
+  if (lang === "ru" && (!isClient || !ruReady)) return null;
   return children;
 }
