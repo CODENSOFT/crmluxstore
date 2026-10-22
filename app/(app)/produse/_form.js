@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiPatch, apiPost } from "@/lib/client";
 import { invalidate, useApi } from "@/lib/useApi";
@@ -10,32 +10,8 @@ import { Button, Field, FormSection, Input, NumberInput, Select, Textarea, Switc
 import { useToast } from "@/app/_components/overlay";
 import { FormPage } from "@/app/_components/formpage";
 import { ProductPicker } from "@/app/_components/pickers";
-import { ImageIcon, Trash, UploadSimple, LinkIcon, Tag, Coins, Warehouse, Cube, PlugsConnected } from "@/app/_components/icons";
-
-// Redimensioneaza imaginea in browser (max 900px, JPEG/WebP) — fisier mic, incarcare rapida
-function resizeImage(file, max = 900) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        const scale = Math.min(1, max / Math.max(img.width, img.height));
-        const c = document.createElement("canvas");
-        c.width = Math.round(img.width * scale);
-        c.height = Math.round(img.height * scale);
-        const ctx = c.getContext("2d");
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, c.width, c.height);
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-        resolve(c.toDataURL("image/webp", 0.85));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+import { GalleryEditor } from "./_gallery";
+import { ImageIcon, Trash, Tag, Coins, Warehouse, Cube, PlugsConnected } from "@/app/_components/icons";
 
 const EMPTY = {
   name: "",
@@ -51,7 +27,7 @@ const EMPTY = {
   vatRate: "",
   minStock: "",
   description: "",
-  photo: "",
+  photos: [],
   active: true,
   isComposite: false,
   components: [],
@@ -70,6 +46,7 @@ function initialForm(product) {
     vatRate: product.vatRate != null ? String(product.vatRate) : "",
     minStock: product.minStock != null ? String(product.minStock) : "",
     active: product.active !== false,
+    photos: product.photos?.length ? product.photos : product.photo ? [product.photo] : [],
     components: (product.components || []).map((c) => ({ product: c.product?._id || c.product, name: c.productName || c.product?.name, quantity: String(c.quantity) })),
   };
 }
@@ -90,8 +67,6 @@ export function ProductForm({ product }) {
   const defWh = warehouses?.length ? (warehouses.find((w) => w.isDefault) || warehouses[0])._id : "";
   const initial = initialState ?? (defWh ? [{ warehouse: defWh, quantity: "" }] : []);
   const [saving, setSaving] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState("");
-  const fileRef = useRef(null);
 
   const set = (p) => setF((x) => ({ ...x, ...p }));
   const missing = [!f.name.trim() && "Denumire", String(f.price).trim() === "" && "Preț cu amănuntul"].filter(Boolean);
@@ -103,26 +78,14 @@ export function ProductForm({ product }) {
   const net = (p) => (settings?.pricesIncludeVat !== false ? p / (1 + vat / 100) : p);
   const margin = (p) => (p > 0 && cost > 0 ? ((net(p) - cost) / net(p)) * 100 : null);
 
-  const photoSrc = f.photo || "";
   const pickable = useMemo(() => (all || []).filter((p) => String(p._id) !== String(product?._id)), [all, product]);
-
-  async function onFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/")) return toast("Alegeți o imagine (JPG, PNG, WebP)", "error");
-    try {
-      set({ photo: await resizeImage(file) });
-    } catch {
-      toast("Imaginea nu a putut fi citită", "error");
-    }
-  }
 
   async function save() {
     setSaving(true);
     try {
       const body = {
         ...f,
+        photo: undefined,
         category: f.category || null,
         components: f.isComposite ? f.components.filter((c) => c.product).map((c) => ({ product: c.product, quantity: Number(c.quantity) || 1 })) : [],
       };
@@ -157,39 +120,8 @@ export function ProductForm({ product }) {
       }
     >
       <div className="space-y-8">
-        <FormSection icon={ImageIcon} title="Fotografie" description="Apare în listă, în comenzi și pe documente. Încărcați o imagine sau lipiți linkul de pe luxstore.md.">
-          <div className="flex flex-col items-start gap-4 sm:flex-row">
-            <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-line-strong bg-surface-2">
-              {photoSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photoSrc} alt={f.name || "Produs"} className="h-full w-full object-contain" />
-              ) : (
-                <ImageIcon size={30} className="text-fg-4" />
-              )}
-            </div>
-            <div className="w-full min-w-0 max-w-2xl flex-1 space-y-2">
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" icon={UploadSimple} onClick={() => fileRef.current?.click()}>
-                  Încarcă imagine
-                </Button>
-                {photoSrc && (
-                  <Button size="sm" variant="danger-ghost" icon={Trash} onClick={() => set({ photo: "" })}>
-                    Elimină
-                  </Button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <div className="min-w-0 flex-1">
-                  <Input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="sau lipiți linkul imaginii (ex: de pe luxstore.md)" prefix={<LinkIcon size={14} />} />
-                </div>
-                <Button size="md" disabled={!/^https?:\/\//.test(photoUrl)} onClick={() => { set({ photo: photoUrl.trim() }); setPhotoUrl(""); }}>
-                  Folosește
-                </Button>
-              </div>
-              <p className="text-[12px] text-fg-3">Imaginea se micșorează automat pentru încărcare rapidă.</p>
-            </div>
-          </div>
+        <FormSection icon={ImageIcon} title="Fotografii" description="Prima fotografie este cea principală: apare în listă, în comenzi, pe site și în botul Telegram. Ordinea se poate schimba oricând.">
+          <GalleryEditor photos={f.photos} onChange={(photos) => set({ photos })} />
         </FormSection>
 
         <FormSection icon={Tag} title="Informații de bază" description="Denumirea și codurile după care produsul se caută la vânzare, se scanează și se leagă de site / 1C.">

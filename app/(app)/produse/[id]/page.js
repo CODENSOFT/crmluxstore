@@ -13,9 +13,10 @@ import { Card, CardHeader, PageHeader, Button, ButtonLink, Badge, Stat, DetailLi
 import { Menu, Modal, useConfirm, useToast } from "@/app/_components/overlay";
 import { Pagination } from "@/app/_components/table";
 import {
-  PencilSimple, DotsThree, TrayArrowDown, Stack, Coins, ChartLineUp, Clock, ImageIcon, Warehouse, ClockCounterClockwise, Trash, Prohibit, CheckCircle, Sliders, Package, Globe, Info,
+  PencilSimple, DotsThree, TrayArrowDown, Stack, Coins, ChartLineUp, Clock, Warehouse, ClockCounterClockwise, Trash, Prohibit, CheckCircle, Sliders, Package, Globe, Info,
 } from "@/app/_components/icons";
 import { PublishModal } from "../_publish";
+import { ProductGallery } from "../_gallery";
 
 const REF_LINK = {
   Order: (id) => `/comenzi/${id}`,
@@ -257,19 +258,7 @@ export default function ProductPage({ params }) {
 
         <div className="space-y-4">
           <Card className="overflow-hidden">
-            <div className="flex aspect-[4/3] items-center justify-center border-b border-line bg-surface-2">
-              {p.photo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={/^https?:\/\//.test(p.photo) ? p.photo : `/api/products/${p._id}/photo?v=${new Date(p.updatedAt).getTime()}`} alt={p.name} className="h-full w-full object-contain p-4" />
-              ) : manage ? (
-                <button type="button" onClick={() => router.push(`/produse/${p._id}/editare`)} className="flex flex-col items-center gap-2 text-[13px] text-fg-3 hover:text-fg">
-                  <ImageIcon size={36} />
-                  Adaugă fotografie
-                </button>
-              ) : (
-                <ImageIcon size={36} className="text-fg-4" />
-              )}
-            </div>
+            <ProductGallery product={p} onAdd={manage ? () => router.push(`/produse/${p._id}/editare`) : null} />
             <div className="space-y-3 px-5 py-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-[12.5px] text-fg-3">Preț cu amănuntul</span>

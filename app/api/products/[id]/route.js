@@ -62,7 +62,7 @@ export const PATCH = route(async ({ req, params, user }) => {
   }
   const keys = Object.keys(fields);
   if (keys.length) await sql`update products set ${sql(fields, ...keys)} where id = ${product._id}`;
-  const changed = keys.filter((k) => k !== "photo" && k !== "components");
+  const changed = keys.filter((k) => !["photo", "photos", "components"].includes(k));
   await logAudit({
     action: "product_edited",
     category: "product",
@@ -72,7 +72,7 @@ export const PATCH = route(async ({ req, params, user }) => {
     details: `Modificat: ${changed.join(", ")}${fields.photo !== undefined ? ", foto" : ""}`,
   });
   const [fresh] = await sql`select p.*, ${stockJson(sql)} as stock from products p where p.id = ${product._id}`;
-  const dto = productDTO({ ...fresh, photo: undefined });
+  const dto = productDTO({ ...fresh, photo: undefined, photos: undefined });
   emit("product.updated", dto);
   return fresh;
 }, { perm: "products.manage" });

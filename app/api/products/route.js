@@ -93,6 +93,7 @@ export const POST = route(async ({ req, user }) => {
   });
   const [fresh] = await sql`select p.*, ${stockJson(sql)} as stock from products p where p.id = ${created._id}`;
   delete fresh.photo;
+  delete fresh.photos;
   emit("product.created", () => productDTO(fresh));
   return fresh;
 }, { perm: "products.manage" });
