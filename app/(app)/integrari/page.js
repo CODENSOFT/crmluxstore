@@ -47,6 +47,82 @@ function StatusPill({ ok, okText, badText }) {
 }
 
 /* ================= Prezentare ================= */
+/* ================= Baza de date: viteza + mutarea pe serverul nou ================= */
+function DbMoveCard() {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const { data: st, error, reload } = useApi("/api/admin/db-move");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  if (error) return null; // doar administratorul principal
+  if (!st) return <Skeleton className="h-28" />;
+  const far = st.sourcePingMs > 20;
+  const run = async () => {
+    const yes = await confirm({
+      title: "Mutăm datele pe baza nouă?",
+      message: "Toate datele se copiază din baza actuală în baza nouă (ce era în baza nouă se înlocuiește). Nu faceți modificări în CRM cât durează mutarea și până trecem site-ul pe baza nouă.",
+      confirmLabel: "Mută datele",
+    });
+    if (!yes) return;
+    setBusy(true);
+    try {
+      const r = await apiPost("/api/admin/db-move", {});
+      setResult(r);
+      toast(r.ok ? "Datele au fost copiate și verificate" : "Copiere cu diferențe — vedeți detaliile", r.ok ? "success" : "error");
+      reload();
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card>
+      <CardHeader
+        title="Baza de date"
+        icon={Database}
+        description="Cât durează un drum de la serverul site-ului până la baza de date. Sub 10 ms = rapid."
+        action={<Badge tone={far ? "warn" : "ok"} dot>{far ? "Departe de server" : "Aproape de server"}</Badge>}
+      />
+      <div className="space-y-3 px-5 pb-5 text-[13px]">
+        <div className="flex flex-wrap gap-x-6 gap-y-1">
+          <span className="text-fg-3">Server: <b className="font-medium text-fg">{st.region}</b></span>
+          <span className="text-fg-3">Baza actuală: <b className={cx("tnum font-medium", far ? "text-warn" : "text-ok")}>{st.sourcePingMs} ms</b></span>
+          {st.targetKey && (
+            <span className="text-fg-3">Baza nouă ({st.targetKey.replace(/_?POSTGRES_URL$/, "")}): <b className="tnum font-medium text-ok">{st.targetPingMs} ms</b></span>
+          )}
+        </div>
+        {st.targetKey ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-2/60 px-4 py-3">
+            <span className="text-fg-2">
+              {st.targetCounts?.users ? `Baza nouă conține deja date (${num(st.targetCounts.products || 0)} produse, ${num(st.targetCounts.orders || 0)} comenzi). Copierea le înlocuiește cu cele actuale.` : "Baza nouă este conectată și goală. Copiați datele în ea."}
+            </span>
+            <Button variant="primary" size="sm" icon={ArrowsClockwise} loading={busy} disabled={st.same} onClick={run}>
+              Mută datele
+            </Button>
+          </div>
+        ) : far ? (
+          <p className="text-fg-3">Pentru viteză, baza trebuie să fie în aceeași regiune ca serverul. Conectați în Vercel o bază Supabase nouă în Frankfurt (cu prefix, ex. FRA) — aici apare butonul de mutare a datelor.</p>
+        ) : null}
+        {result && (
+          <div className="rounded-xl border border-line px-4 py-3">
+            <div className={cx("font-medium", result.ok ? "text-ok" : "text-bad")}>
+              {result.ok ? `Copiat și verificat: ${result.tables.length} tabele, ${num(result.tables.reduce((a, t) => a + t.target, 0))} rânduri, în ${result.seconds} s.` : "Unele tabele diferă:"}
+            </div>
+            {!result.ok && (
+              <ul className="mt-1 text-[12.5px] text-bad">
+                {result.tables.filter((t) => !t.ok).map((t) => (
+                  <li key={t.table}>{t.table}: {t.source} → {t.target}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function Overview({ go }) {
   const { data: o } = useApi("/api/integrations/overview");
   if (!o) return <Skeleton className="h-80" />;
@@ -94,6 +170,7 @@ function Overview({ go }) {
   ];
   return (
     <div className="space-y-4">
+      <DbMoveCard />
       <Alert tone="accent" icon={Lightning} title="Toate conexiunile rulează direct din CRM">
         Nu mai este nevoie de Make sau alte servicii intermediare: site-ul, 1C și orice alt sistem comunică direct cu CRM-ul prin API-ul și webhook-urile de mai jos.
         Scenariile vechi din Make pot fi oprite.
