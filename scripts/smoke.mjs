@@ -141,7 +141,7 @@ check("situatie stoc", r.ok && r.data.rows.length >= 2, r);
 r = await call("a", "GET", "/api/stock?view=reorder");
 check("lista de comandat", r.ok, r);
 r = await call("a", "GET", "/api/dashboard");
-check("dashboard", r.ok && r.data.chart.length === 30 && r.data.month.revenue === 12500, r.data?.month);
+check("panou: doar actiuni (sarcini, comenzi, stoc)", r.ok && r.data.counts && Array.isArray(r.data.newOrders) && Array.isArray(r.data.approval) && typeof r.data.tasks?.open === "number" && r.data.stock?.out && r.data.stock?.low && r.data.chart === undefined, r.data);
 for (const t of ["sales", "products", "customers", "debts", "stock", "writeoffs"]) {
   r = await call("a", "GET", `/api/reports/${t}`);
   check(`raport ${t}`, r.ok, r);

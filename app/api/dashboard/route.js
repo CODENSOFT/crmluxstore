@@ -2,125 +2,82 @@ import { db } from "@/lib/db";
 import { route } from "@/lib/api";
 import { getSettings } from "@/lib/settings";
 import { visibilityFilter } from "@/lib/orderService";
-import { SALE_STAGE_KEYS, OPEN_STAGE_KEYS } from "@/lib/orderStages";
-import { TZ, startOfDay, startOfMonth, addDays, addMonths, ymd } from "@/lib/time";
+import { can } from "@/lib/permissions";
+import { OPEN_STAGE_KEYS } from "@/lib/orderStages";
+import { startOfDay, addDays } from "@/lib/time";
 
-const DAYS = 30;
-
+// Panoul = ce trebuie facut acum, pentru contul care il deschide (fara statistici — acelea sunt in Rapoarte):
+//   - sarcinile mele (intarziate / azi / urmeaza) + sarcinile intarziate ale echipei (cine le gestioneaza)
+//   - comenzile de preluat (noi), de aprobat (cine aproba) si cate sunt in fiecare etapa
+//   - produsele fara stoc sau sub minim (de suplinit), inventarierile neterminate
+// Angajatul vede doar comenzile lui + cele noi venite de pe site / bot / API (visibilityFilter).
 export const GET = route(async ({ user }) => {
   const sql = db();
   const settings = await getSettings();
   const vis = visibilityFilter(user);
-  const sale = sql`o.status in ${sql(SALE_STAGE_KEYS)}`;
-  const now = new Date();
-  const today = startOfDay(now);
-  const monthStart = startOfMonth(now);
-  const prevMonthStart = addMonths(monthStart, -1);
-  // aceeasi perioada din luna trecuta (pentru comparatie corecta)
-  const prevSamePeriodEnd = new Date(prevMonthStart.getTime() + (now.getTime() - monthStart.getTime()));
-  const chartStart = addDays(today, -(DAYS - 1));
+  const approver = can(user, "orders.approve");
+  const teamTasks = can(user, "tasks.manage");
+  const inventory = can(user, "stock.inventory");
+  const today = startOfDay(new Date());
+  const tomorrow = addDays(today, 1);
   const threshold = settings.lowStockThreshold ?? 5;
 
-  const revenue = async (from, to) => {
-    const [r] = await sql`
-      select coalesce(sum(o.total), 0) as revenue, count(*)::int as orders,
-             coalesce(sum(i.cost), 0) as cost, coalesce(sum(i.items), 0) as items
-      from orders o
-      left join lateral (
-        select sum(quantity * coalesce(cost_price, 0)) as cost, sum(line_total) as items from order_items where order_id = o.id
-      ) i on true
-      where ${vis} and ${sale} and o.created_at >= ${from} ${to ? sql`and o.created_at <= ${to}` : sql``}`;
-    return r;
-  };
-
-  const [
-    todayStats,
-    monthStats,
-    prevStats,
-    statusCounts,
-    [debt],
-    series,
-    byChannel,
-    topProducts,
-    topCustomers,
-    recentOrders,
-    tasks,
-    [{ overdueTasks }],
-    [stockAgg],
-    lowStock,
-    [{ newCustomers }],
-  ] = await Promise.all([
-    revenue(today),
-    revenue(monthStart),
-    revenue(prevMonthStart, prevSamePeriodEnd),
-    sql`select o.status, o.channel, count(*)::int as n from orders o
-        where ${vis} and o.status in ${sql(OPEN_STAGE_KEYS)} group by o.status, o.channel`,
-    sql`select coalesce(sum(o.total - o.paid_amount), 0) as amount, count(*)::int as orders,
-               coalesce(sum(o.total - o.paid_amount) filter (where o.due_date is not null and o.due_date < now()), 0) as overdue
-        from orders o where ${vis} and ${sale} and o.payment_status <> 'paid'`,
-    sql`select to_char(o.created_at at time zone ${TZ}, 'YYYY-MM-DD') as day, sum(o.total) as revenue, count(*)::int as orders
-        from orders o where ${vis} and ${sale} and o.created_at >= ${chartStart} group by 1`,
-    sql`select o.channel as id, sum(o.total) as revenue, count(*)::int as orders
-        from orders o where ${vis} and ${sale} and o.created_at >= ${monthStart}
-        group by o.channel order by revenue desc`,
-    sql`select i.product_id as id, min(i.product_name) as name, min(i.unit) as unit, sum(i.quantity) as qty, sum(i.line_total) as revenue
-        from order_items i join orders o on o.id = i.order_id
-        where ${vis} and ${sale} and o.created_at >= ${monthStart}
-        group by i.product_id order by revenue desc limit 6`,
-    sql`select o.customer_id as id, min(o.customer_name) as name, sum(o.total) as revenue, count(*)::int as orders
-        from orders o where ${vis} and ${sale} and o.created_at >= ${monthStart} and o.customer_id is not null
-        group by o.customer_id order by revenue desc limit 5`,
-    sql`select o.id, o.number, o.customer_name, o.total, o.status, o.channel, o.created_at, o.payment_status
-        from orders o where ${vis} order by o.created_at desc limit 8`,
-    sql`select id, title, due_date, priority, status from tasks
-        where assigned_to_id = ${user.id} and status <> 'done'
-        order by due_date nulls last, created_at desc limit 6`,
-    sql`select count(*)::int as overdue_tasks from tasks
-        where assigned_to_id = ${user.id} and status <> 'done' and due_date < ${today}`,
-    sql`select coalesce(sum(t.qty * coalesce(p.price, 0)), 0) as value,
-               coalesce(sum(t.qty * coalesce(p.cost_price, 0)), 0) as cost, count(*)::int as products
-        from products p
-        left join lateral (select coalesce(sum(quantity), 0) as qty from stock where product_id = p.id) t on true
-        where p.active`,
-    sql`select p.id, p.name, p.unit, p.sku, t.qty as total, coalesce(p.min_stock, ${threshold}) as "limit",
-               count(*) over () as full_count
+  const [stages, newOrders, approval, myTasks, [taskCounts], teamOverdue, stock, inventories] = await Promise.all([
+    sql`select o.status, count(*)::int as n from orders o
+        where ${vis} and o.status in ${sql(OPEN_STAGE_KEYS)} group by o.status`,
+    // cele care asteapta de cel mai mult timp — primele
+    sql`select o.id, o.number, o.customer_name, o.customer_phone, o.total, o.channel, o.created_at, u.name as responsible_name
+        from orders o left join users u on u.id = o.responsible_id
+        where ${vis} and o.status = 'new' order by o.created_at limit 8`,
+    sql`select o.id, o.number, o.customer_name, o.total, o.created_at, u.name as created_by_name
+        from orders o left join users u on u.id = o.created_by_id
+        where ${vis} and o.status = 'pending_approval' order by o.created_at limit 6`,
+    sql`select t.id, t.title, t.due_date, t.priority, t.status, c.name as customer_name
+        from tasks t left join customers c on c.id = t.customer_id
+        where t.assigned_to_id = ${user.id} and t.status <> 'done'
+        order by (t.due_date is null), t.due_date, (t.priority = 'high') desc, t.created_at
+        limit 12`,
+    sql`select count(*)::int as open,
+               count(*) filter (where due_date < ${today})::int as overdue,
+               count(*) filter (where due_date >= ${today} and due_date < ${tomorrow})::int as today
+        from tasks where assigned_to_id = ${user.id} and status <> 'done'`,
+    teamTasks
+      ? sql`select t.id, t.title, t.due_date, u.name as assignee, count(*) over () as full_count
+            from tasks t join users u on u.id = t.assigned_to_id
+            where t.status <> 'done' and t.due_date < ${today} and t.assigned_to_id <> ${user.id}
+            order by t.due_date limit 6`
+      : [],
+    sql`select p.id, p.name, p.sku, p.unit, t.qty as total, coalesce(p.min_stock, ${threshold}) as "limit"
         from products p
         cross join lateral (select coalesce(sum(quantity), 0) as qty from stock where product_id = p.id) t
         where p.active and t.qty <= coalesce(p.min_stock, ${threshold})
-        order by t.qty, lower(p.name) limit 8`,
-    sql`select count(*)::int as new_customers from customers where created_at >= ${monthStart}`,
+        order by t.qty, lower(p.name)`,
+    inventory
+      ? sql`select i.id, i.number, i.created_at, w.name as warehouse_name, jsonb_array_length(i.items) as lines
+            from inventory_counts i left join warehouses w on w.id = i.warehouse_id
+            where i.status = 'draft' order by i.created_at limit 5`
+      : [],
   ]);
 
-  // Serie completa pe zile (inclusiv zilele fara vanzari)
-  const byDay = new Map(series.map((s) => [s.day, s]));
-  const chart = [];
-  for (let i = 0; i < DAYS; i++) {
-    const key = ymd(addDays(chartStart, i));
-    chart.push({ date: key, revenue: byDay.get(key)?.revenue || 0, orders: byDay.get(key)?.orders || 0 });
-  }
+  const counts = Object.fromEntries(OPEN_STAGE_KEYS.map((k) => [k, 0]));
+  for (const s of stages) counts[s.status] = s.n;
 
-  const counts = { new: 0, pending_approval: 0, processing: 0, ready: 0, invoicing: 0, siteNew: 0 };
-  for (const c of statusCounts) {
-    counts[c.status] = (counts[c.status] || 0) + c.n;
-    if (c.status === "new" && c.channel === "site") counts.siteNew += c.n;
-  }
+  // de suplinit: pana la dublul pragului minim
+  const withSuggestion = (p) => ({ ...p, suggested: Math.max(1, Math.ceil(Math.max(p.limit * 2, 1) - Math.max(p.total, 0))) });
+  const out = stock.filter((p) => p.total <= 0);
+  const low = stock.filter((p) => p.total > 0);
 
   return {
-    currency: settings.currency,
-    today: todayStats,
-    month: { ...monthStats, profit: monthStats.items - monthStats.cost, avg: monthStats.orders ? monthStats.revenue / monthStats.orders : 0 },
-    prevMonth: prevStats,
+    can: { approve: approver, teamTasks, inventory },
     counts,
-    debt,
-    chart,
-    byChannel,
-    topProducts,
-    topCustomers,
-    recentOrders,
-    tasks,
-    overdueTasks,
-    stock: stockAgg,
-    lowStock: { items: lowStock.map(({ fullCount, ...p }) => p), count: lowStock[0]?.fullCount || 0 },
-    newCustomers,
+    newOrders,
+    approval,
+    tasks: { items: myTasks, ...taskCounts },
+    teamOverdue: teamTasks ? { items: teamOverdue.map(({ fullCount, ...t }) => t), count: teamOverdue[0]?.fullCount || 0 } : null,
+    stock: {
+      out: { items: out.slice(0, 8).map(withSuggestion), count: out.length },
+      low: { items: low.slice(0, 8).map(withSuggestion), count: low.length },
+    },
+    inventories,
   };
 });

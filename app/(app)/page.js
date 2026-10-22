@@ -1,18 +1,21 @@
 "use client";
 
-import { isAdminUser } from "@/lib/permissions";
-import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useApi } from "@/lib/useApi";
-import { useUser, can } from "@/app/_components/user";
-import { money, moneyShort, formatDateShort, relativeTime, num, pct, formatDate, plural } from "@/lib/format";
+import { useState } from "react";
+import { useApi, invalidate } from "@/lib/useApi";
+import { apiPatch } from "@/lib/client";
+import { useUser } from "@/app/_components/user";
+import { useToast } from "@/app/_components/overlay";
+import { money, relativeTime, num, formatDate, plural } from "@/lib/format";
 import { channelLabel, UNIT_LABELS, TASK_PRIORITY } from "@/lib/constants";
-import { Card, CardHeader, Stat, PageHeader, ButtonLink, StageBadge, Badge, Skeleton, EmptyState, cx, Segmented, PaymentBadge } from "@/app/_components/ui";
-import { AreaChart, BarList, ColumnChart } from "@/app/_components/charts";
+import { Card, CardHeader, PageHeader, ButtonLink, Badge, Skeleton, EmptyState, cx } from "@/app/_components/ui";
 import {
-  Plus, TrayArrowDown, Receipt, Coins, ChartLineUp, Wallet, Globe, Clock, PencilSimple, Warning, CheckSquareOffset,
-  ArrowRight, Package, UsersThree, Stack,
+  Plus, TrayArrowDown, Receipt, Clock, Warning, CheckSquareOffset, ArrowRight, Package, Prohibit, Truck, Timer, Circle,
+  Play, Check, CheckCircle, ClipboardText, CalendarBlank, Sparkle, UsersThree,
 } from "@/app/_components/icons";
+
+// Panoul: doar ce trebuie facut acum (sarcini, comenzi, stoc), pe drepturile contului.
+// Statisticile (vanzari, marje, top) sunt in Rapoarte.
 
 function greeting() {
   const h = Number(new Intl.DateTimeFormat("ro-RO", { hour: "numeric", hour12: false, timeZone: "Europe/Chisinau" }).format(new Date()));
@@ -21,65 +24,347 @@ function greeting() {
   return "Bună seara";
 }
 
-function AttentionItem({ href, icon: IconC, tone, title, text }) {
-  const tones = { warn: "bg-warn-soft text-warn", accent: "bg-accent-soft text-accent", bad: "bg-bad-soft text-bad", violet: "bg-violet-soft text-violet" };
+const TONES = {
+  bad: "border-bad/50 bg-bad-soft text-bad",
+  warn: "border-warn/50 bg-warn-soft text-warn",
+  accent: "border-accent/50 bg-accent-soft text-accent",
+  violet: "border-violet/50 bg-violet-soft text-violet",
+};
+
+// Contor de actiune: colorat cand e ceva de facut, discret cand e 0
+function ActionTile({ href, icon: IconC, label, count, tone, sub, loading }) {
+  const active = count > 0;
   return (
-    <Link href={href} className="group flex min-w-[220px] flex-1 items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 shadow-xs transition-colors hover:border-line-strong">
-      <span className={cx("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", tones[tone])}>
-        <IconC size={18} weight="bold" />
-      </span>
+    <Link
+      href={href}
+      className={cx(
+        "group flex min-w-0 items-center gap-3 rounded-xl border px-3.5 py-3 transition-colors",
+        active ? TONES[tone] : "border-line bg-surface text-fg-4 hover:border-line-strong"
+      )}
+    >
+      <IconC size={20} weight={active ? "fill" : "regular"} className="shrink-0" />
       <span className="min-w-0 flex-1">
-        <span className="block text-[13.5px] font-semibold text-fg">{title}</span>
-        <span className="block truncate text-[12.5px] text-fg-3">{text}</span>
+        <span className={cx("tnum block text-[20px] font-semibold leading-tight", active ? "" : "text-fg-3")}>{loading ? "…" : num(count || 0)}</span>
+        <span className={cx("block text-[12.5px] leading-tight", active ? "font-medium text-fg" : "text-fg-3")}>{label}</span>
+        {sub && active && <span className="block truncate text-[11.5px] text-fg-3">{sub}</span>}
       </span>
-      <ArrowRight size={15} className="shrink-0 text-fg-4 transition-transform group-hover:translate-x-0.5 group-hover:text-fg-2" />
+      <ArrowRight size={14} className="shrink-0 opacity-40 transition-transform group-hover:translate-x-0.5 group-hover:opacity-80" />
     </Link>
+  );
+}
+
+function dueInfo(due) {
+  if (!due) return { text: "Fără termen", tone: "text-fg-4" };
+  const d = new Date(due);
+  const today = new Date(new Date().toDateString());
+  const days = Math.round((new Date(d.toDateString()) - today) / 86400000);
+  if (days < 0) return { text: `Întârziată · ${formatDate(due)}`, tone: "font-medium text-bad" };
+  if (days === 0) return { text: "Azi", tone: "font-medium text-accent" };
+  if (days === 1) return { text: "Mâine", tone: "text-fg-2" };
+  return { text: formatDate(due), tone: "text-fg-3" };
+}
+
+const TASK_ICON = { todo: Circle, in_progress: Timer };
+
+function MyTasks({ d, reload }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(null);
+  const move = async (t, status) => {
+    setBusy(t._id);
+    try {
+      await apiPatch(`/api/tasks/${t._id}`, { status });
+      invalidate("/api/tasks", "/api/me");
+      await reload();
+      if (status === "done") toast("Sarcina a fost finalizată");
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+  const items = d?.tasks.items || [];
+  return (
+    <Card>
+      <CardHeader
+        title="Sarcinile mele"
+        icon={CheckSquareOffset}
+        description={d ? (d.tasks.open ? `${plural(d.tasks.open, "sarcină deschisă", "sarcini deschise", "de sarcini deschise")}` : "Nimic de făcut") : null}
+        action={<Link href="/sarcini" className="text-[12.5px] font-medium text-accent hover:underline">Toate</Link>}
+      />
+      {!d ? (
+        <Skeleton className="mx-5 mb-5 h-40" />
+      ) : items.length === 0 ? (
+        <EmptyState compact icon={Sparkle} title="Nicio sarcină deschisă" description="Sarcinile atribuite ție apar aici." />
+      ) : (
+        <ul className="divide-y divide-line border-t border-line">
+          {items.map((t) => {
+            const due = dueInfo(t.dueDate);
+            const pr = TASK_PRIORITY.find((p) => p.key === t.priority);
+            const IconC = TASK_ICON[t.status] || Circle;
+            const next = t.status === "todo" ? { key: "in_progress", label: "Începe", icon: Play } : { key: "done", label: "Finalizează", icon: Check };
+            return (
+              <li key={t._id} className="flex items-start gap-3 px-5 py-3">
+                <IconC size={17} className={cx("mt-0.5 shrink-0", t.status === "in_progress" ? "text-accent" : "text-fg-4")} />
+                <Link href={`/sarcini/${t._id}`} className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] leading-snug text-fg">{t.title}</span>
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px]">
+                    <span className={cx("inline-flex items-center gap-1", due.tone)}>
+                      <CalendarBlank size={12} />
+                      {due.text}
+                    </span>
+                    {t.priority === "high" && <Badge tone={pr?.tone}>{pr?.label}</Badge>}
+                    {t.customerName && <span className="truncate text-fg-3">· {t.customerName}</span>}
+                  </span>
+                </Link>
+                <button
+                  type="button"
+                  disabled={busy === t._id}
+                  onClick={() => move(t, next.key)}
+                  className={cx(
+                    "inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2.5 text-[12.5px] font-medium ring-1 ring-inset transition-colors disabled:opacity-50",
+                    next.key === "done" ? "text-ok ring-ok/40 hover:bg-ok-soft" : "text-accent ring-accent/40 hover:bg-accent-soft"
+                  )}
+                >
+                  <next.icon size={13} weight="bold" />
+                  {next.label}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function TeamOverdue({ team }) {
+  if (!team?.count) return null;
+  return (
+    <Card>
+      <CardHeader
+        title="Întârziate în echipă"
+        icon={UsersThree}
+        description={plural(team.count, "sarcină cu termenul depășit", "sarcini cu termenul depășit", "de sarcini cu termenul depășit")}
+        action={<Link href="/sarcini" className="text-[12.5px] font-medium text-accent hover:underline">Toate</Link>}
+      />
+      <ul className="divide-y divide-line border-t border-line">
+        {team.items.map((t) => (
+          <li key={t._id}>
+            <Link href={`/sarcini/${t._id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-surface-2/70">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13.5px] text-fg">{t.title}</span>
+                <span className="block text-[12px] text-fg-3">
+                  {t.assignee} · <span className="font-medium text-bad">{formatDate(t.dueDate)}</span>
+                </span>
+              </span>
+              <ArrowRight size={14} className="shrink-0 text-fg-4" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function OrderRow({ o, cur, by }) {
+  return (
+    <li>
+      <Link href={`/comenzi/${o._id}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2/70">
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-x-2">
+            <span className="text-[13.5px] font-medium text-fg">{o.number}</span>
+            {o.channel && <span className="text-[12px] text-fg-4">{channelLabel(o.channel)}</span>}
+          </span>
+          <span className="block truncate text-[12.5px] text-fg-3">
+            {o.customerName || "Fără client"}
+            {o.customerPhone ? ` · ${o.customerPhone}` : ""}
+            {by ? ` · de la ${by}` : ""}
+          </span>
+        </span>
+        <span className="shrink-0 text-right">
+          <span className="tnum block text-[13.5px] font-medium text-fg">{money(o.total, cur)}</span>
+          <span className="inline-flex items-center gap-1 text-[11.5px] text-fg-4">
+            <Clock size={11} />
+            {relativeTime(o.createdAt)}
+          </span>
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+function Orders({ d }) {
+  const approver = d?.can.approve;
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader
+          title="Comenzi noi de preluat"
+          icon={Receipt}
+          description="Cele care așteaptă de cel mai mult timp — primele"
+          action={<Link href="/comenzi?status=new" className="text-[12.5px] font-medium text-accent hover:underline">Toate</Link>}
+        />
+        {!d ? (
+          <Skeleton className="mx-5 mb-5 h-40" />
+        ) : d.newOrders.length === 0 ? (
+          <EmptyState compact icon={CheckCircle} title="Nicio comandă nouă" description="Comenzile noi de pe site, din bot sau din magazin apar aici." />
+        ) : (
+          <ul className="divide-y divide-line border-t border-line">
+            {d.newOrders.map((o) => (
+              <OrderRow key={o._id} o={o} />
+            ))}
+          </ul>
+        )}
+      </Card>
+      {d?.approval.length > 0 && (
+        <Card>
+          <CardHeader
+            title={approver ? "Așteaptă aprobarea ta" : "Comenzile tale la aprobare"}
+            icon={Clock}
+            description={approver ? "Comenzi create de angajați" : "Le aprobă administratorul"}
+            action={<Link href="/comenzi?status=pending_approval" className="text-[12.5px] font-medium text-accent hover:underline">Toate</Link>}
+          />
+          <ul className="divide-y divide-line border-t border-line">
+            {d.approval.map((o) => (
+              <OrderRow key={o._id} o={o} by={approver ? o.createdByName : null} />
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function StockList({ title, icon: IconC, tone, list, empty }) {
+  return (
+    <div className="min-w-0">
+      <div className={cx("mb-1 flex items-center gap-2 px-5 text-[13px] font-semibold", tone === "bad" ? "text-bad" : "text-warn")}>
+        <IconC size={15} weight="bold" />
+        {title}
+        <span className="tnum rounded-md bg-surface-3 px-1.5 text-[11.5px] text-fg-2">{list.count}</span>
+      </div>
+      {list.items.length === 0 ? (
+        <p className="px-5 py-4 text-[12.5px] text-fg-4">{empty}</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {list.items.map((p) => (
+            <li key={p._id}>
+              <Link href={`/produse/${p._id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-surface-2/70">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13.5px] text-fg">{p.name}</span>
+                  <span className="block truncate text-[12px] text-fg-3">
+                    {p.sku ? `${p.sku} · ` : ""}în stoc {num(p.total)} {UNIT_LABELS[p.unit] || ""} · minim {num(p.limit)}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-lg bg-surface-2 px-2 py-1 text-[12px] font-medium text-fg-2" title="Cantitate sugerată de comandat">
+                  +{num(p.suggested)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {list.count > list.items.length && <p className="px-5 pt-1 text-[12px] text-fg-4">și încă {list.count - list.items.length}…</p>}
+    </div>
+  );
+}
+
+function Stock({ d }) {
+  const total = (d?.stock.out.count || 0) + (d?.stock.low.count || 0);
+  return (
+    <Card>
+      <CardHeader
+        title="Stoc de suplinit"
+        icon={Package}
+        description={d ? (total ? "Produse epuizate sau sub stocul minim · cifra din dreapta = cât să comandați" : "Toate produsele sunt peste stocul minim") : null}
+        action={
+          <div className="flex items-center gap-3">
+            <Link href="/stoc?tab=reorder" className="text-[12.5px] font-medium text-accent hover:underline">Lista de comandat</Link>
+          </div>
+        }
+      />
+      {!d ? (
+        <Skeleton className="mx-5 mb-5 h-40" />
+      ) : total === 0 ? (
+        <EmptyState compact icon={CheckCircle} title="Stocul e în regulă" description="Niciun produs activ nu e epuizat sau sub pragul minim." />
+      ) : (
+        <div className="grid gap-4 border-t border-line pb-4 pt-3 lg:grid-cols-2">
+          <StockList title="Fără stoc" icon={Prohibit} tone="bad" list={d.stock.out} empty="Niciun produs epuizat." />
+          <StockList title="Sub stocul minim" icon={Warning} tone="warn" list={d.stock.low} empty="Niciun produs sub minim." />
+        </div>
+      )}
+      {d && total > 0 && (
+        <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3">
+          <ButtonLink href="/receptie/nou" icon={TrayArrowDown} size="sm">
+            Recepție marfă
+          </ButtonLink>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function Inventories({ list }) {
+  if (!list?.length) return null;
+  return (
+    <Card>
+      <CardHeader title="Inventarieri neterminate" icon={ClipboardText} description="Numărați produsele rămase și finalizați fișa" />
+      <ul className="divide-y divide-line border-t border-line">
+        {list.map((i) => (
+          <li key={i._id}>
+            <Link href={`/inventariere/${i._id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-surface-2/70">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] font-medium text-fg">{i.number}</span>
+                <span className="block truncate text-[12px] text-fg-3">
+                  {i.warehouseName} · {plural(i.lines, "produs", "produse", "de produse")} · începută {relativeTime(i.createdAt)}
+                </span>
+              </span>
+              <ArrowRight size={14} className="shrink-0 text-fg-4" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
 export default function Dashboard() {
   const user = useUser();
-  const { data: d, loading } = useApi("/api/dashboard", { refreshInterval: 60000 });
-  const [metric, setMetric] = useState("revenue");
-  const cur = d?.currency || "MDL";
-
-  const chart = useMemo(
-    () =>
-      (d?.chart || []).map((p) => ({
-        label: formatDateShort(p.date + "T12:00:00"),
-        tooltipLabel: formatDate(p.date + "T12:00:00"),
-        value: metric === "revenue" ? p.revenue : p.orders,
-        sub: metric === "revenue" ? `${p.orders} comenzi` : money(p.revenue, cur),
-      })),
-    [d, metric, cur]
-  );
-
-  const delta =
-    d && d.prevMonth.revenue > 0 ? ((d.month.revenue - d.prevMonth.revenue) / d.prevMonth.revenue) * 100 : null;
-  const marginPct = d && d.month.items > 0 ? (d.month.profit / d.month.items) * 100 : 0;
-  const isAdmin = isAdminUser(user);
-  const approver = can(user, "orders.approve");
-  const reports = can(user, "reports.view");
+  const { data: d, loading, reload } = useApi("/api/dashboard", { refreshInterval: 60000 });
   const firstName = user.name.split(" ")[0];
+  const c = d?.counts || {};
+  const wait = loading && !d;
 
-  const attention = [];
-  if (d?.counts.siteNew) attention.push({ href: "/comenzi?status=new&channel=site", icon: Globe, tone: "accent", title: `${plural(d.counts.siteNew, "comandă nouă", "comenzi noi", "de comenzi noi")} de pe site`, text: "Confirmați telefonic și treceți-le în pregătire" });
-  if (approver && d?.counts.pending_approval) attention.push({ href: "/comenzi?status=pending_approval", icon: Clock, tone: "warn", title: `${d.counts.pending_approval} așteaptă aprobarea ta`, text: "Comenzi create de angajați" });
-  if (d && d.counts.new - d.counts.siteNew > 0) attention.push({ href: "/comenzi?status=new", icon: Receipt, tone: "violet", title: `${d.counts.new - d.counts.siteNew} comenzi noi (ciorne)`, text: "Neconfirmate încă" });
-  if (d?.lowStock.count) attention.push({ href: "/stoc?tab=reorder", icon: Warning, tone: "bad", title: `${plural(d.lowStock.count, "produs", "produse", "de produse")} sub stocul minim`, text: "Vezi lista de reaprovizionare" });
-  if (d?.overdueTasks) attention.push({ href: "/sarcini", icon: CheckSquareOffset, tone: "bad", title: `${plural(d.overdueTasks, "sarcină întârziată", "sarcini întârziate", "de sarcini întârziate")}`, text: "Termenul a trecut" });
+  const tiles = [
+    { key: "overdue", href: "/sarcini", icon: Warning, label: "Sarcini întârziate", count: d?.tasks.overdue, tone: "bad" },
+    { key: "today", href: "/sarcini", icon: CheckSquareOffset, label: "Sarcini pentru azi", count: d?.tasks.today, tone: "accent" },
+    { key: "new", href: "/comenzi?status=new", icon: Receipt, label: "Comenzi noi", count: c.new, tone: "accent" },
+    (d?.can.approve || c.pending_approval > 0) && {
+      key: "approval",
+      href: "/comenzi?status=pending_approval",
+      icon: Clock,
+      label: d?.can.approve ? "De aprobat" : "La aprobare",
+      count: c.pending_approval,
+      tone: "warn",
+    },
+    { key: "processing", href: "/comenzi?status=processing", icon: Package, label: "De pregătit", count: c.processing, tone: "violet" },
+    { key: "ready", href: "/comenzi?status=ready", icon: Truck, label: "De livrat", count: (c.ready || 0) + (c.invoicing || 0), tone: "violet", sub: c.invoicing ? `${c.invoicing} în livrare` : null },
+    { key: "out", href: "/stoc?status=out", icon: Prohibit, label: "Fără stoc", count: d?.stock.out.count, tone: "bad" },
+    { key: "low", href: "/stoc?tab=reorder", icon: Warning, label: "Stoc mic", count: d?.stock.low.count, tone: "warn" },
+  ].filter(Boolean);
+
+  const nothing = d && tiles.every((t) => !t.count) && !d.inventories?.length;
 
   return (
     <div className="animate-in">
       <PageHeader
         title={`${greeting()}, ${firstName}`}
-        description={
-          isAdmin
-            ? "Situația magazinului pe scurt — vânzări, comenzi de procesat, încasări și stoc."
-            : "Comenzile, clienții și sarcinile tale."
-        }
+        description={nothing ? "Nimic urgent acum — totul e la zi." : "Ce ai de făcut: sarcini, comenzi și stoc."}
         actions={
           <>
+            <ButtonLink href="/sarcini/nou" icon={CheckSquareOffset} variant="secondary">
+              Sarcină
+            </ButtonLink>
             <ButtonLink href="/receptie/nou" icon={TrayArrowDown} variant="secondary">
               Recepție
             </ButtonLink>
@@ -90,224 +375,25 @@ export default function Dashboard() {
         }
       />
 
-      {attention.length > 0 && (
-        <div className="mb-5 flex flex-wrap gap-3">
-          {attention.map((a) => (
-            <AttentionItem key={a.href} {...a} />
-          ))}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {tiles.map(({ key, ...t }) => (
+          <ActionTile key={key} {...t} loading={wait} />
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
+          <MyTasks d={d} reload={reload} />
+          <TeamOverdue team={d?.teamOverdue} />
         </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat
-          label="Vânzări azi"
-          icon={Receipt}
-          loading={loading && !d}
-          value={moneyShort(d?.today.revenue, cur)}
-          sub={d ? `${d.today.orders} comenzi` : null}
-          href="/comenzi"
-        />
-        <Stat
-          label="Vânzări luna aceasta"
-          icon={ChartLineUp}
-          loading={loading && !d}
-          value={moneyShort(d?.month.revenue, cur)}
-          delta={delta}
-          sub={d ? `vs. aceeași perioadă luna trecută · ${d.month.orders} comenzi` : null}
-          href={reports ? "/rapoarte" : undefined}
-        />
-        <Stat
-          label="Marjă brută (luna)"
-          icon={Coins}
-          loading={loading && !d}
-          value={moneyShort(d?.month.profit, cur)}
-          sub={d ? `${pct(marginPct)} din vânzări · bon mediu ${moneyShort(d.month.avg, cur)}` : null}
-        />
-        <Stat
-          label="De încasat"
-          icon={Wallet}
-          tone={d?.debt.overdue > 0 ? "bad" : undefined}
-          loading={loading && !d}
-          value={moneyShort(d?.debt.amount, cur)}
-          sub={d ? (d.debt.overdue > 0 ? `${moneyShort(d.debt.overdue, cur)} cu termen depășit` : `${d.debt.orders} comenzi neachitate`) : null}
-          href={reports ? "/rapoarte?tab=debts" : undefined}
-        />
+        <Orders d={d} />
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader
-            title="Vânzări în ultimele 30 de zile"
-            description={metric === "revenue" ? "Valoarea comenzilor confirmate, pe zile" : "Numărul de comenzi confirmate, pe zile"}
-            action={
-              <Segmented
-                size="sm"
-                value={metric}
-                onChange={setMetric}
-                options={[
-                  { value: "revenue", label: "Valoare" },
-                  { value: "orders", label: "Comenzi" },
-                ]}
-              />
-            }
-          />
-          <div className="px-3 pb-3">
-            {loading && !d ? (
-              <Skeleton className="mx-2 h-[220px]" />
-            ) : metric === "revenue" ? (
-              <AreaChart data={chart} format={(v) => money(v, cur)} ariaLabel="Vânzări pe zile" />
-            ) : (
-              <ColumnChart data={chart} format={(v) => `${v} comenzi`} ariaLabel="Comenzi pe zile" />
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="Canale de vânzare" description="Luna curentă, după valoare" />
-          <div className="px-5 pb-5">
-            {loading && !d ? (
-              <Skeleton className="h-40" />
-            ) : (
-              <BarList
-                items={(d?.byChannel || []).map((c) => ({ key: c._id, label: channelLabel(c._id), value: c.revenue, sub: `${c.orders}` }))}
-                format={(v) => moneyShort(v, cur)}
-              />
-            )}
-          </div>
-        </Card>
+      <div className="mt-4 space-y-4">
+        <Stock d={d} />
+        <Inventories list={d?.inventories} />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        <Card>
-          <CardHeader title="Cele mai vândute produse" description="Luna curentă" icon={Package} action={reports && <Link href="/rapoarte?tab=products" className="text-[12.5px] font-medium text-accent hover:underline">Raport</Link>} />
-          <div className="px-5 pb-5">
-            {loading && !d ? (
-              <Skeleton className="h-40" />
-            ) : (
-              <BarList
-                items={(d?.topProducts || []).map((p) => ({ key: p._id, label: p.name, value: p.revenue, sub: `${num(p.qty)} ${UNIT_LABELS[p.unit] || ""}` }))}
-                format={(v) => moneyShort(v, cur)}
-              />
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="Clienți de top" description="Luna curentă" icon={UsersThree} action={<Link href="/clienti?sort=-spent" className="text-[12.5px] font-medium text-accent hover:underline">Toți</Link>} />
-          <ul className="divide-y divide-line px-2 pb-2">
-            {loading && !d && <Skeleton className="mx-3 mb-3 h-40" />}
-            {d && d.topCustomers.length === 0 && <p className="px-3 py-8 text-center text-[13px] text-fg-3">Nicio vânzare către clienți înregistrați luna aceasta.</p>}
-            {d?.topCustomers.map((c, i) => (
-              <li key={c._id}>
-                <Link href={`/clienti/${c._id}`} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-surface-2">
-                  <span className="tnum w-4 text-[12px] font-medium text-fg-4">{i + 1}</span>
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-fg">{c.name}</span>
-                  <span className="tnum text-[12.5px] text-fg-3">{c.orders} cmd.</span>
-                  <span className="tnum w-24 text-right text-[13px] font-medium text-fg">{moneyShort(c.revenue, cur)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card className="lg:col-span-2 xl:col-span-1">
-          <CardHeader
-            title="Stoc critic"
-            description={d ? `Valoare stoc: ${moneyShort(d.stock.value, cur)} (cost ${moneyShort(d.stock.cost, cur)})` : "Produse sub pragul minim"}
-            icon={Stack}
-            action={<Link href="/stoc?tab=reorder" className="text-[12.5px] font-medium text-accent hover:underline">De comandat</Link>}
-          />
-          <ul className="divide-y divide-line px-2 pb-2">
-            {loading && !d && <Skeleton className="mx-3 mb-3 h-40" />}
-            {d && d.lowStock.items.length === 0 && (
-              <EmptyState compact icon={Stack} title="Stocul e în regulă" description="Niciun produs activ nu e sub pragul minim." />
-            )}
-            {d?.lowStock.items.map((p) => (
-              <li key={p._id}>
-                <Link href={`/produse/${p._id}`} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-surface-2">
-                  <span className={cx("h-2 w-2 shrink-0 rounded-full", p.total <= 0 ? "bg-bad" : "bg-warn")} />
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-fg">{p.name}</span>
-                  <span className={cx("tnum text-[13px] font-medium", p.total <= 0 ? "text-bad" : "text-warn")}>
-                    {num(p.total)} {UNIT_LABELS[p.unit] || ""}
-                  </span>
-                  <span className="tnum w-16 text-right text-[12px] text-fg-4">min {num(p.limit)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader title="Comenzi recente" action={<Link href="/comenzi" className="text-[12.5px] font-medium text-accent hover:underline">Toate comenzile</Link>} />
-          {loading && !d ? (
-            <Skeleton className="mx-5 mb-5 h-48" />
-          ) : d?.recentOrders.length ? (
-            <ul className="divide-y divide-line border-t border-line">
-              {d.recentOrders.map((o) => (
-                <li key={o._id}>
-                  <Link href={`/comenzi/${o._id}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2/70">
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="text-[13.5px] font-medium text-fg">{o.number}</span>
-                        <span className="text-[12px] text-fg-4">{channelLabel(o.channel)}</span>
-                      </span>
-                      <span className="block truncate text-[12.5px] text-fg-3">
-                        {o.customerName || "Fără client"} · {relativeTime(o.createdAt)}
-                      </span>
-                    </span>
-                    <span className="hidden sm:block">
-                      <PaymentBadge status={o.paymentStatus} />
-                    </span>
-                    <StageBadge status={o.status} short />
-                    <span className="tnum w-28 text-right text-[13.5px] font-medium text-fg">{money(o.total, cur)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState
-              icon={Receipt}
-              title="Încă nu există comenzi"
-              description="Creați prima comandă sau conectați site-ul din Integrări."
-              action={
-                <ButtonLink href="/comenzi/nou" variant="primary" icon={Plus} size="sm">
-                  Comandă nouă
-                </ButtonLink>
-              }
-            />
-          )}
-        </Card>
-
-        <Card>
-          <CardHeader title="Sarcinile mele" icon={CheckSquareOffset} action={<Link href="/sarcini" className="text-[12.5px] font-medium text-accent hover:underline">Toate</Link>} />
-          {d && d.tasks.length === 0 ? (
-            <EmptyState compact icon={CheckSquareOffset} title="Nicio sarcină deschisă" description="Sarcinile atribuite ție apar aici." />
-          ) : (
-            <ul className="divide-y divide-line border-t border-line">
-              {d?.tasks.map((t) => {
-                const overdue = t.dueDate && new Date(t.dueDate) < new Date(new Date().toDateString());
-                const pr = TASK_PRIORITY.find((p) => p.key === t.priority);
-                return (
-                  <li key={t._id}>
-                    <Link href="/sarcini" className="flex items-start gap-3 px-5 py-3 hover:bg-surface-2/70">
-                      <PencilSimple size={15} className="mt-0.5 shrink-0 text-fg-4" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13.5px] text-fg">{t.title}</span>
-                        <span className={cx("block text-[12px]", overdue ? "font-medium text-bad" : "text-fg-3")}>
-                          {t.dueDate ? `${overdue ? "Întârziată · " : ""}${formatDate(t.dueDate)}` : "Fără termen"}
-                        </span>
-                      </span>
-                      {t.priority === "high" && <Badge tone={pr?.tone}>{pr?.label}</Badge>}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-      </div>
     </div>
   );
 }
