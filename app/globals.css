@@ -326,6 +326,17 @@ textarea:focus-visible {
   }
 }
 
+/* Telefon: Safari (iPhone) mareste automat ecranul cand se atinge un camp cu text sub 16 px.
+   Pe ecrane mici campurile au 16 px — nu se mai mareste nimic la scriere; marirea cu doua degete ramane.
+   In afara straturilor Tailwind ca sa aiba prioritate fata de text-[13.5px] din componente. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
