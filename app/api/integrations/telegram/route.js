@@ -4,6 +4,7 @@ import { getSettings, updateSettings } from "@/lib/settings";
 import { generateSecret } from "@/lib/apiKeys";
 import { publicBaseUrl } from "@/lib/publicUrl";
 import { tg } from "@/lib/telegram/api";
+import { WEBHOOK_UPDATES } from "@/lib/telegram/bot";
 import { logIntegration } from "@/lib/integrationLog";
 
 const mask = (v) => (v ? `${v.slice(0, 6)}••••••${v.slice(-4)}` : "");
@@ -62,14 +63,14 @@ export const PUT = route(
         throw badRequest(`Telegram nu acceptă tokenul: ${e.message}`);
       }
       const secret = generateSecret(24).replace(/[^A-Za-z0-9_-]/g, "");
-      await tg(token, "setWebhook", { url, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
+      await tg(token, "setWebhook", { url, secret_token: secret, allowed_updates: WEBHOOK_UPDATES, drop_pending_updates: true });
       await tg(token, "setMyCommands", {
         commands: [
           { command: "start", description: "Catalog / Каталог" },
           { command: "lang", description: "Română / Русский" },
         ],
       }).catch(() => {});
-      Object.assign(patch, { enabled: true, webhookSecret: secret, botUsername: me.username, botName: me.first_name, connectedAt: new Date().toISOString() });
+      Object.assign(patch, { enabled: true, webhookSecret: secret, updatesV: 2, botUsername: me.username, botName: me.first_name, connectedAt: new Date().toISOString() });
       await logIntegration({ source: "telegram", direction: "out", action: "bot.connect", message: `@${me.username} conectat` });
     }
     if (b.action === "disconnect") {

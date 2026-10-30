@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import { connectDB } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
-import { handleUpdate } from "@/lib/telegram/bot";
+import { handleUpdate, ensureWebhookUpdates } from "@/lib/telegram/bot";
+import { publicBaseUrl } from "@/lib/publicUrl";
 
 export const maxDuration = 60;
 
@@ -20,6 +21,8 @@ export async function POST(req) {
   if (!same(req.headers.get("x-telegram-bot-api-secret-token"), s.telegram.webhookSecret)) {
     return Response.json({ ok: false, error: "Neautorizat" }, { status: 401 });
   }
+  // boti conectati inainte de lista cu poze: webhook-ul primeste de acum si cererile inline
+  await ensureWebhookUpdates(s, `${publicBaseUrl(s, req)}/api/telegram/webhook`).catch(() => {});
   let update;
   try {
     update = await req.json();
