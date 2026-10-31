@@ -23,6 +23,7 @@ async function view(s, req) {
     botName: t.botName || "",
     warehouse: t.warehouse || null,
     contactText: t.contactText || "",
+    notifyStatus: !!t.notifyStatus,
     connectedAt: t.connectedAt || null,
     webhookUrl: `${publicBaseUrl(s, req)}/api/telegram/webhook`,
     stats,
@@ -31,7 +32,7 @@ async function view(s, req) {
 
 export const GET = route(async ({ req }) => view(await getSettings({ fresh: true }), req), { auth: "owner" });
 
-// { token?, warehouse?, contactText?, action?: "connect" | "disconnect" }
+// { token?, warehouse?, contactText?, notifyStatus?, action?: "connect" | "disconnect" }
 export const PUT = route(
   async ({ req }) => {
     const b = await readJson(req);
@@ -50,6 +51,7 @@ export const PUT = route(
       patch.warehouse = b.warehouse || null;
     }
     if (b.contactText !== undefined) patch.contactText = String(b.contactText || "").slice(0, 500);
+    if (b.notifyStatus !== undefined) patch.notifyStatus = !!b.notifyStatus;
 
     const token = patch.token || s.telegram.token;
     if (b.action === "connect") {

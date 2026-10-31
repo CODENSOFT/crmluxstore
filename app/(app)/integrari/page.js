@@ -219,11 +219,12 @@ function TelegramConfig({ cfg, mutate }) {
   const [token, setToken] = useState(cfg.token || "");
   const [warehouse, setWarehouse] = useState(cfg.warehouse || "");
   const [contactText, setContactText] = useState(cfg.contactText || "");
+  const [notifyStatus, setNotifyStatus] = useState(!!cfg.notifyStatus);
   const [busy, setBusy] = useState(null);
   const save = async (action) => {
     setBusy(action || "save");
     try {
-      const res = await apiPut("/api/integrations/telegram", { token, warehouse: warehouse || null, contactText, action });
+      const res = await apiPut("/api/integrations/telegram", { token, warehouse: warehouse || null, contactText, notifyStatus, action });
       mutate(res);
       setToken(res.token);
       invalidate("/api/integrations");
@@ -272,6 +273,14 @@ function TelegramConfig({ cfg, mutate }) {
           </FormSection>
           <FormSection icon={Info} title="3. Text la „Contacte”" description="Opțional: program, adresă, cum se face livrarea. Telefonul și adresa magazinului se iau din Setări.">
             <Textarea rows={3} value={contactText} onChange={(e) => setContactText(e.target.value)} placeholder="Luni–Sâmbătă 9:00–19:00 · Livrare în Chișinău în 24h" />
+          </FormSection>
+          <FormSection icon={Info} title="4. Mesaje către client" description="Ce primește clientul în Telegram după ce plasează comanda.">
+            <Switch
+              checked={notifyStatus}
+              onChange={setNotifyStatus}
+              label="Anunță clientul la schimbarea statusului"
+              description="Mesaje automate când comanda e confirmată, gata, predată la livrare sau finalizată. Oprit: clientul nu mai primește aceste mesaje."
+            />
           </FormSection>
           <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
             {cfg.enabled && <Button variant="danger-ghost" icon={Prohibit} loading={busy === "disconnect"} onClick={disconnect} className="mr-auto">Deconectează</Button>}
