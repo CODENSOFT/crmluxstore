@@ -142,6 +142,20 @@
   --ring: 0 0 0 3px rgb(91 132 242 / 0.3);
 }
 
+/* Mini App-ul botului Telegram (/tg — lista de produse cu poze; pagina pune clasa tg-app pe <html>):
+   aceleasi clase ca in CRM, dar culorile vin din tema aplicatiei Telegram (telegram-web-app.js pune
+   --tg-theme-* pe <html>). Dupa temele CRM, ca sa aiba prioritate fata de ele. */
+:root.tg-app {
+  --bg: var(--tg-theme-secondary-bg-color, #efeff4);
+  --surface: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #ffffff));
+  --surface-2: var(--tg-theme-secondary-bg-color, #efeff4);
+  --line: var(--tg-theme-section-separator-color, rgb(128 128 128 / 0.2));
+  --fg: var(--tg-theme-text-color, #000000);
+  --fg-3: var(--tg-theme-hint-color, #8e8e93);
+  --accent: var(--tg-theme-button-color, #2481cc);
+  --accent-fg: var(--tg-theme-button-text-color, #ffffff);
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
