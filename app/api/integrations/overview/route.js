@@ -22,10 +22,17 @@ export const GET = route(
         (select count(*)::int from customers where coalesce(external_id, '') <> '') as customers_mapped,
         (select count(*)::int from customers) as customers_total,
         (select count(*)::int from orders where channel = 'telegram') as telegram_orders,
-        (select count(*)::int from telegram_chats) as telegram_chats`,
+        (select count(*)::int from telegram_chats) as telegram_chats,
+        (select count(*)::int from products where coalesce(barcode, '') <> '') as products_barcode,
+        (select count(*)::int from product_barcodes) as extra_barcodes,
+        (select count(*)::int from scan_sessions) as scan_total,
+        (select count(*)::int from scan_sessions where status in ('pending', 'error')) as scan_pending,
+        (select max(created_at) from scan_sessions where source = 'scanner') as scan_last_at`,
       sql`select * from integration_logs where source = '1c' order by created_at desc limit 1`,
     ]);
     const key1c = keys.filter((k) => k.kind === "1c");
+    const keyScan = keys.filter((k) => k.kind === "scanner");
+    const lastUsed = (list) => list.reduce((m, k) => (k.lastUsedAt && (!m || k.lastUsedAt > m) ? k.lastUsedAt : m), null);
     return {
       baseUrl: publicBaseUrl(s, req),
       woo: {
@@ -39,13 +46,23 @@ export const GET = route(
       telegram: { enabled: !!s.telegram?.enabled, botUsername: s.telegram?.botUsername || "", orders: c.telegramOrders, chats: c.telegramChats },
       onec: {
         keys: key1c.length,
-        lastUsedAt: key1c.reduce((m, k) => (k.lastUsedAt && (!m || k.lastUsedAt > m) ? k.lastUsedAt : m), null),
+        lastUsedAt: lastUsed(key1c),
         lastLog: last1c || null,
         notExported: c.notExported,
         productsMapped: c.productsMapped,
         productsTotal: c.productsTotal,
         customersMapped: c.customersMapped,
         customersTotal: c.customersTotal,
+      },
+      scanner: {
+        keys: keyScan.length,
+        lastUsedAt: lastUsed(keyScan),
+        lastSessionAt: c.scanLastAt || null,
+        sessions: c.scanTotal,
+        pending: c.scanPending,
+        productsBarcode: c.productsBarcode,
+        productsTotal: c.productsTotal,
+        extraBarcodes: c.extraBarcodes,
       },
     };
   },

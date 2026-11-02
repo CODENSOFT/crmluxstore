@@ -17,6 +17,7 @@ import {
 } from "@/app/_components/icons";
 import { PublishModal } from "../_publish";
 import { ProductGallery } from "../_gallery";
+import { BarcodesCard } from "./_barcodes";
 
 const REF_LINK = {
   Order: (id) => `/comenzi/${id}`,
@@ -297,6 +298,8 @@ export default function ProductPage({ params }) {
               <p className="whitespace-pre-line px-5 pb-5 text-[13.5px] leading-relaxed text-fg-2">{p.description}</p>
             </Card>
           )}
+
+          <BarcodesCard product={p} manage={manage} />
 
           <Card>
             <CardHeader title="Integrări" icon={Globe} />

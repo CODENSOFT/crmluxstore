@@ -28,6 +28,10 @@ async function handle(req, ctx, method) {
   try {
     await connectDB();
     if (route.scope) key = await authenticateApiKey(req, route.scope);
+    // Cheile de scaner au acces doar la /scanner/* (si /ping) — nu pot modifica preturi, clienti, comenzi
+    if (key?.kind === "scanner" && !route.pattern.startsWith("/scanner") && route.pattern !== "/ping") {
+      return Response.json({ ok: false, error: "Cheia de scaner are acces doar la /api/v1/scanner/*" }, { status: 403 });
+    }
     let body = null;
     if (method === "POST" || method === "PATCH" || method === "PUT") {
       const text = await req.text();

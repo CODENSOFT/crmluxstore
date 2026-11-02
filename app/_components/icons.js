@@ -127,4 +127,9 @@ export {
   ShoppingBag,
   Bank,
   TelegramLogo,
+  Camera,
+  Minus,
+  SpeakerHigh,
+  SpeakerSlash,
+  FileArrowUp,
 } from "@phosphor-icons/react";

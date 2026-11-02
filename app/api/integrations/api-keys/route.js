@@ -25,7 +25,7 @@ export const POST = route(
     const clean = Array.isArray(scopes) ? scopes.filter((s) => ["read", "write"].includes(s)) : [];
     const [row] = await sql`insert into api_keys ${sql({
       name: name.trim(),
-      kind: ["1c", "site", "generic"].includes(kind) ? kind : "generic",
+      kind: ["1c", "site", "scanner", "generic"].includes(kind) ? kind : "generic",
       prefix: k.prefix,
       hash: k.hash,
       scopes: clean.length ? clean : ["read", "write"],

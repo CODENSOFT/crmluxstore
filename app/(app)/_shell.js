@@ -10,7 +10,7 @@ import { roleLabel } from "@/lib/constants";
 import { stageInfo } from "@/lib/orderStages";
 import {
   SquaresFour, Receipt, UsersThree, Package, Stack, TrayArrowDown, ArrowsLeftRight, TrashSimple, ClipboardText,
-  Truck, Warehouse, CheckSquareOffset, ChartLineUp, Bell, UserGear, PlugsConnected, GearSix,
+  Truck, Warehouse, CheckSquareOffset, Barcode, ChartLineUp, Bell, UserGear, PlugsConnected, GearSix,
   MagnifyingGlass, Plus, List, SidebarSimple, SignOut, Moon, Sun, Desktop, UserCircle, X, Drop, CaretRight, Buildings, User, Warning,
 } from "@/app/_components/icons";
 import { Avatar, Kbd, cx, Spinner, useFocusOnOpen } from "@/app/_components/ui";
@@ -31,6 +31,7 @@ const NAV = [
     title: "Stoc",
     items: [
       { href: "/stoc", label: "Situația stocului", icon: Stack },
+      { href: "/scanare", label: "Scanare", icon: Barcode },
       { href: "/receptie", label: "Recepții", icon: TrayArrowDown },
       { href: "/transfer", label: "Transferuri", icon: ArrowsLeftRight, perm: "stock.transfer" },
       { href: "/anulare", label: "Casări", icon: TrashSimple, perm: "stock.writeoff" },

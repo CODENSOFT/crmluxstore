@@ -14,7 +14,7 @@ import { useUser } from "@/app/_components/user";
 import { Modal, Drawer, Menu, useConfirm, useToast } from "@/app/_components/overlay";
 import {
   Globe, Key, WebhooksLogo, Database, Copy, Check, ArrowsClockwise, PaperPlaneTilt, Plus, Trash, DotsThree, CheckCircle, WarningCircle, DownloadSimple, BookOpen,
-  Lightning, ShieldCheck, ArrowRight, Info, Code, ListChecks, Prohibit, TelegramLogo, Warehouse, ArrowSquareOut, } from "@/app/_components/icons";
+  Lightning, ShieldCheck, ArrowRight, Info, Code, ListChecks, Prohibit, TelegramLogo, Warehouse, ArrowSquareOut, Barcode, } from "@/app/_components/icons";
 
 function CopyField({ label, value, secret, hint }) {
   const [copied, setCopied] = useState(false);
@@ -152,6 +152,14 @@ function Overview({ go }) {
       text: "API pregătit: catalog, prețuri, stocuri, clienți, comenzi și recepții. Documentația e gata pentru programatorul 1C.",
       status: <StatusPill ok={o.onec.keys > 0 && !!o.onec.lastUsedAt} okText="Activ" badText={o.onec.keys ? "Cheie creată, neutilizată" : "Pregătit"} />,
       meta: `${num(o.onec.productsMapped)}/${num(o.onec.productsTotal)} produse cu cod 1C · ${num(o.onec.notExported)} comenzi de preluat`,
+    },
+    {
+      key: "scanner",
+      icon: Barcode,
+      title: "Scanere de coduri de bare",
+      text: "Scaner USB / Bluetooth, camera telefonului sau terminal de colectare date (TSD): recepție, casare, transfer, inventariere, pregătire comenzi.",
+      status: <StatusPill ok={!!o.scanner.lastSessionAt} okText="Activ" badText={o.scanner.keys ? "Cheie creată, neutilizată" : "Pregătit"} />,
+      meta: `${num(o.scanner.productsBarcode)}/${num(o.scanner.productsTotal)} produse cu cod de bare · ${num(o.scanner.pending)} sesiuni de verificat`,
     },
     {
       key: "api",
@@ -651,6 +659,124 @@ function OneCTab({ go }) {
   );
 }
 
+/* ================= Scanere ================= */
+const SCAN_ENDPOINTS = [
+  ["GET", "/scanner", "Configurarea: operațiuni, depozite, formate de cod acceptate"],
+  ["GET", "/scanner/lookup?code=", "Produsul după cod de bare / SKU / cod 1C: preț, stoc pe depozite"],
+  ["GET", "/scanner/catalog?updatedSince=", "Catalog compact pentru lucru offline pe terminal (paginat)"],
+  ["GET", "/scanner/orders", "Comenzile „În lucru” de pregătit, cu liniile lor"],
+  ["GET", "/scanner/inventories", "Inventarierile deschise"],
+  ["GET", "/scanner/inventories/{id}?blind=1", "Liniile fișei de inventariere (blind = fără stocul scriptic)"],
+  ["POST", "/scanner/sessions", "Trimite o sesiune de scanare (coduri + cantități); apply=true o aplică imediat"],
+  ["GET", "/scanner/sessions/{id}", "Statusul sesiunii (de verificat / aplicată / respinsă) și rezultatul"],
+];
+
+const DEV_QUESTIONS = [
+  "Modelul scanerului / terminalului și sistemul (Android, Windows CE, iOS) — și numele programului de scanare.",
+  "Cum trimite datele: (a) ca tastatură (USB / Bluetooth HID), (b) prin rețea — HTTP REST / JSON, (c) fișier export (CSV / TXT / Excel).",
+  "Dacă trimite prin HTTP: poate pune un antet propriu (X-API-Key sau Authorization: Bearer)? Lucrează cu HTTPS?",
+  "Ce operațiuni folosesc: recepție, casare, transfer, inventariere, pregătire comenzi sau doar verificare preț / stoc.",
+  "Lucrează offline (descarcă catalogul și trimite mai târziu) sau online (caută fiecare cod în CRM)?",
+  "Ce coduri scanează: EAN-13 / EAN-8, UPC, Code 128, QR, DataMatrix (marcaj); există coduri de bax / cutie cu multiplicator?",
+  "Fiecare listă are un identificator unic (externalId / număr document) — ca retrimiterea să nu dubleze stocul?",
+  "Formatul exact al fișierului / JSON-ului lor (un exemplu real) și cum se aleg depozitul și comanda pe terminal.",
+];
+
+function ScannerTab({ go }) {
+  const { data: o } = useApi("/api/integrations/overview");
+  if (!o) return <Skeleton className="h-96" />;
+  const sc = o.scanner;
+  const steps = [
+    { done: sc.productsBarcode > 0, title: "Produsele au coduri de bare", text: `${num(sc.productsBarcode)} din ${num(sc.productsTotal)} produse au cod de bare principal · ${num(sc.extraBarcodes)} coduri suplimentare (alte ambalaje, baxuri). Se completează în Produse sau prin import Excel.` },
+    { done: true, title: "Scaner USB / Bluetooth (mod tastatură) — funcționează deja", text: "Se conectează la calculator / telefon și se scanează direct în pagina Scanare, în căutarea produselor și în formularele de comandă, recepție, transfer, casare.", action: <a href="/scanare" className="inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[12.5px] font-medium text-accent ring-1 ring-inset ring-accent/40 hover:bg-accent-soft">Deschide Scanare</a> },
+    { done: sc.keys > 0, title: "Terminal / aplicație de scanare: cheie API de tip „Scaner”", text: "Tab-ul API și chei → Cheie nouă → Scaner. Cheia se dă dezvoltatorului programului de scanare.", action: <Button size="sm" onClick={() => go("api")}>Creează cheia</Button> },
+    { done: !!sc.lastUsedAt, title: "Dezvoltatorul testează conexiunea", text: sc.lastUsedAt ? `Ultima cerere: ${relativeTime(sc.lastUsedAt)}` : "GET /api/v1/scanner cu antetul X-API-Key — răspunsul conține depozitele și operațiunile." },
+    { done: !!sc.lastSessionAt, title: "Prima sesiune trimisă de terminal", text: sc.lastSessionAt ? `Ultima: ${relativeTime(sc.lastSessionAt)} · ${num(sc.sessions)} sesiuni în total, ${num(sc.pending)} de verificat.` : "POST /api/v1/scanner/sessions — apare în Scanare → Sesiuni, unde se verifică și se aplică." },
+  ];
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="space-y-4">
+        <Card>
+          <CardHeader title="Conectarea scanerelor — pregătită" description="Trei moduri, toate gata: scaner ca tastatură, terminal prin API REST, fișier exportat. Alegerea depinde de aparatul lor." icon={Barcode} />
+          <ol className="divide-y divide-line border-t border-line">
+            {steps.map((s, i) => (
+              <li key={i} className="flex items-start gap-3 px-5 py-3.5">
+                <span className={cx("mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold", s.done ? "bg-ok text-white" : "bg-surface-3 text-fg-2")}>
+                  {s.done ? <Check size={13} weight="bold" /> : i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13.5px] font-medium text-fg">{s.title}</div>
+                  <div className="text-[12.5px] text-fg-3">{s.text}</div>
+                </div>
+                {s.action}
+              </li>
+            ))}
+          </ol>
+        </Card>
+        <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+          {[
+            { t: "Mod tastatură (HID)", d: "Scaner USB / Bluetooth / inel. Nu cere nicio configurare în CRM — doar sufixul Enter activat pe scaner (implicit la majoritatea).", tone: "ok", b: "Gata" },
+            { t: "Terminal TSD prin API", d: "Android (Zebra, Honeywell, Urovo, Point Mobile…) cu program propriu: trimite sesiunile prin HTTPS, JSON.", tone: "info", b: "Gata — cere cheie" },
+            { t: "Fișier export", d: "Terminalul salvează CSV / TXT („cod;cantitate”), fișierul se încarcă în Scanare. Bun pentru inventarieri mari.", tone: "ok", b: "Gata" },
+          ].map((m) => (
+            <Card key={m.t} className="p-4">
+              <div className="flex items-center justify-between gap-2"><h4 className="text-[13.5px] font-semibold text-fg">{m.t}</h4><Badge tone={m.tone}>{m.b}</Badge></div>
+              <p className="mt-1.5 text-[12.5px] text-fg-3">{m.d}</p>
+            </Card>
+          ))}
+        </div>
+        <Card className="overflow-hidden">
+          <CardHeader title="Endpoint-uri pentru terminale" description={`Adresa de bază: ${o.baseUrl}/api/v1 · antet: X-API-Key (cheie de tip Scaner)`} icon={Code} />
+          <table className="stack-sm w-full border-t border-line text-[13px]">
+            <tbody className="divide-y divide-line">
+              {SCAN_ENDPOINTS.map(([m, p, d]) => (
+                <tr key={m + p}>
+                  <td className="w-20 px-5 py-2.5"><Badge tone={m === "GET" ? "info" : "ok"}>{m}</Badge></td>
+                  <td className="stack-left break-all px-2 py-2.5 font-mono text-[12.5px] text-fg">{p}</td>
+                  <td className="stack-left px-5 py-2.5 text-fg-3">{d}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+      <div className="space-y-4">
+        <Card className="p-5">
+          <h4 className="flex items-center gap-2 text-[14px] font-semibold text-fg"><BookOpen size={17} /> Pentru dezvoltatorul scanerului</h4>
+          <p className="mt-1.5 text-[13px] text-fg-3">Documentația completă: modurile de conectare, formatele JSON / CSV, exemple de cereri, codurile de eroare și regulile anti-dublare.</p>
+          <div className="mt-4 space-y-2">
+            <a href="/docs/INTEGRARE-SCANER.md" target="_blank" rel="noreferrer" className="flex h-9 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-[13.5px] font-medium text-white hover:bg-accent-hover">
+              <DownloadSimple size={16} weight="bold" /> Documentația (Markdown)
+            </a>
+            <a href="/api/v1/openapi.json" target="_blank" rel="noreferrer" className="flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-[13.5px] font-medium text-fg ring-1 ring-inset ring-line-strong hover:bg-surface-2">
+              <Code size={16} /> Specificația OpenAPI 3.1 (JSON)
+            </a>
+            <a href="/scanare?tab=sessions" className="flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-[13.5px] font-medium text-fg ring-1 ring-inset ring-line-strong hover:bg-surface-2">
+              <ListChecks size={16} /> Sesiuni de scanare{sc.pending ? ` (${sc.pending} de verificat)` : ""}
+            </a>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <h4 className="flex items-center gap-2 text-[13.5px] font-semibold text-fg"><Info size={16} /> Ce cerem de la dezvoltator</h4>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-[12.5px] text-fg-3">
+            {DEV_QUESTIONS.map((q) => <li key={q}>{q}</li>)}
+          </ol>
+        </Card>
+        <Card className="p-5">
+          <h4 className="flex items-center gap-2 text-[13.5px] font-semibold text-fg"><ShieldCheck size={16} /> Reguli</h4>
+          <ul className="mt-2 space-y-1.5 text-[12.5px] text-fg-3">
+            <li>• Cheia de scaner vede doar endpoint-urile /scanner — nu poate citi clienți sau comenzi complete.</li>
+            <li>• Retrimiterea aceleiași sesiuni (același externalId) nu dublează stocul.</li>
+            <li>• Codurile necunoscute nu se pierd: sesiunea așteaptă verificarea, iar codul se leagă de produs o singură dată.</li>
+            <li>• Codul se caută după: cod suplimentar → cod de bare → SKU → cod 1C; EAN-13 / UPC cu sau fără 0 în față.</li>
+            <li>• Fiecare cerere apare în Jurnal.</li>
+          </ul>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 /* ================= Chei API ================= */
 function KeysTab() {
   const toast = useToast();
@@ -689,7 +815,7 @@ function KeysTab() {
 
   const columns = [
     { key: "name", header: "Cheie", render: (k) => <div><div className="font-medium text-fg">{k.name}</div><div className="font-mono text-[12px] text-fg-3">{k.prefix}…</div></div> },
-    { key: "kind", header: "Sistem", render: (k) => <Badge tone={k.kind === "1c" ? "violet" : "neutral"}>{{ "1c": "1C", site: "Site", generic: "General" }[k.kind]}</Badge> },
+    { key: "kind", header: "Sistem", render: (k) => <Badge tone={k.kind === "1c" ? "violet" : k.kind === "scanner" ? "info" : "neutral"}>{{ "1c": "1C", site: "Site", generic: "General", scanner: "Scaner" }[k.kind]}</Badge> },
     { key: "scopes", header: "Drepturi", render: (k) => <span className="text-[12.5px] text-fg-2">{k.scopes.map((s) => (s === "read" ? "citire" : "scriere")).join(" + ")}</span> },
     { key: "used", header: "Utilizare", render: (k) => <span className="text-[12.5px] text-fg-3">{k.lastUsedAt ? `${relativeTime(k.lastUsedAt)} · ${num(k.usageCount)} cereri` : "neutilizată"}</span> },
     { key: "status", header: "Status", render: (k) => <Badge tone={k.active ? "ok" : "bad"} dot>{k.active ? "Activă" : "Revocată"}</Badge> },
@@ -739,8 +865,9 @@ function KeysTab() {
             <Input focusFirst="always" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="1C Contabilitate" />
           </Field>
           <Field label="Sistem">
-            <Segmented className="w-full [&>button]:flex-1 [&>button]:justify-center" value={f.kind} onChange={(v) => setF({ ...f, kind: v })} options={[{ value: "1c", label: "1C" }, { value: "generic", label: "Altă aplicație" }]} />
+            <Segmented className="w-full [&>button]:flex-1 [&>button]:justify-center" value={f.kind} onChange={(v) => setF({ ...f, kind: v })} options={[{ value: "1c", label: "1C" }, { value: "scanner", label: "Scaner" }, { value: "generic", label: "Altă aplicație" }]} />
           </Field>
+          {f.kind === "scanner" && <p className="-mt-2 text-[12px] text-fg-3">Cheia de scaner are acces doar la endpoint-urile /scanner (căutare cod, catalog, sesiuni de scanare).</p>}
           <div className="space-y-2">
             <Checkbox checked={f.scopes.includes("read")} onChange={(v) => setF({ ...f, scopes: v ? [...new Set([...f.scopes, "read"])] : f.scopes.filter((s) => s !== "read") })} label="Citire" description="Produse, stocuri, clienți, comenzi" />
             <Checkbox checked={f.scopes.includes("write")} onChange={(v) => setF({ ...f, scopes: v ? [...new Set([...f.scopes, "write"])] : f.scopes.filter((s) => s !== "write") })} label="Scriere" description="Creare / actualizare date, stocuri, comenzi" />
@@ -906,7 +1033,7 @@ X-Lux-Signature: sha256=<HMAC-SHA256(secret, corpul cererii)>
 function LogTab() {
   const [f, setF] = useQueryState({ tab: "log", page: "1" });
   const { data, loading, reload } = useApi(`/api/integrations/logs${qs({ source: f.source, status: f.status, page: f.page, limit: 50 })}`);
-  const SRC = { woo: "Site", telegram: "Telegram", "1c": "1C", api: "API", cron: "Automat", webhook: "Webhook" };
+  const SRC = { woo: "Site", telegram: "Telegram", "1c": "1C", scanner: "Scaner", api: "API", cron: "Automat", webhook: "Webhook" };
   const columns = [
     { key: "date", header: "Când", render: (l) => <span className="whitespace-nowrap text-[12.5px] text-fg-3">{formatDateTime(l.createdAt)}</span> },
     { key: "src", header: "Sursă", render: (l) => <Badge tone={l.source === "woo" ? "accent" : l.source === "1c" ? "violet" : "neutral"}>{SRC[l.source] || l.source}</Badge> },
@@ -950,6 +1077,7 @@ function Inner() {
           { key: "site", label: "Site luxstore.md" },
           { key: "telegram", label: "Bot Telegram" },
           { key: "1c", label: "1C" },
+          { key: "scanner", label: "Scanere" },
           { key: "api", label: "API și chei" },
           { key: "webhooks", label: "Webhook-uri" },
           { key: "log", label: "Jurnal" },
@@ -959,6 +1087,7 @@ function Inner() {
       {f.tab === "site" && <SiteTab />}
       {f.tab === "telegram" && <TelegramTab />}
       {f.tab === "1c" && <OneCTab go={go} />}
+      {f.tab === "scanner" && <ScannerTab go={go} />}
       {f.tab === "api" && <KeysTab />}
       {f.tab === "webhooks" && <HooksTab />}
       {f.tab === "log" && <LogTab />}
