@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Claude Code local settings
 .claude/
+
+# documente cu date de acces (nu se publica)
+livrabile/

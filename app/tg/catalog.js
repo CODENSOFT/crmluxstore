@@ -33,9 +33,11 @@ const TEXT = {
   },
 };
 
+const authHeaders = (app, chatKey) => ({ "x-telegram-init-data": app.initData || "", ...(chatKey && { "x-telegram-chat-key": chatKey }) });
+
 // Lista de produse cu poze, in interiorul Telegram (fara tastatura: campul de cautare se deschide doar la atingere).
 // Atingerea unui produs trimite fisa lui in chat si inchide lista.
-export default function TelegramCatalog({ category, query, lang }) {
+export default function TelegramCatalog({ category, query, lang, chatKey }) {
   const [app, setApp] = useState(null); // window.Telegram.WebApp, dupa incarcarea scriptului Telegram
   const [outside, setOutside] = useState(false);
   const [cat, setCat] = useState(category);
@@ -53,7 +55,8 @@ export default function TelegramCatalog({ category, query, lang }) {
 
   const init = useCallback(() => {
     const w = window.Telegram?.WebApp;
-    if (!w?.initData) return setOutside(true);
+    // din meniul de jos al botului Telegram nu trimite initData — atunci ne identifica cheia chatului din adresa
+    if (!w?.initData && !chatKey) return setOutside(true);
     const theme = () => (document.documentElement.dataset.theme = w.colorScheme === "dark" ? "dark" : "light");
     theme();
     w.onEvent("themeChanged", theme);
@@ -62,7 +65,7 @@ export default function TelegramCatalog({ category, query, lang }) {
     w.ready();
     w.expand();
     setApp(w);
-  }, []);
+  }, [chatKey]);
 
   // culorile temei Telegram pe toata pagina (vezi :root.tg-app in globals.css)
   useEffect(() => {
@@ -78,7 +81,7 @@ export default function TelegramCatalog({ category, query, lang }) {
   useEffect(() => {
     if (!app) return;
     const ctl = new AbortController();
-    fetch(`/api/telegram/app?${new URLSearchParams({ c: cat, q: search })}`, { headers: { "x-telegram-init-data": app.initData }, signal: ctl.signal })
+    fetch(`/api/telegram/app?${new URLSearchParams({ c: cat, q: search })}`, { headers: authHeaders(app, chatKey), signal: ctl.signal })
       .then((r) => r.json())
       .then((j) => {
         if (!j.ok) throw new Error(j.error);
@@ -88,7 +91,7 @@ export default function TelegramCatalog({ category, query, lang }) {
         if (e.name !== "AbortError") setFailedKey(key);
       });
     return () => ctl.abort();
-  }, [app, cat, search, key]);
+  }, [app, cat, search, key, chatKey]);
 
   // categoria deschisa din bot: chip-ul ei vizibil in banda de categorii
   const firstList = !!data;
@@ -110,7 +113,7 @@ export default function TelegramCatalog({ category, query, lang }) {
     try {
       const r = await fetch("/api/telegram/app", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-telegram-init-data": app.initData },
+        headers: { "content-type": "application/json", ...authHeaders(app, chatKey) },
         body: JSON.stringify({ product: p.id }),
       });
       const j = await r.json();
