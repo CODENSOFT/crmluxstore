@@ -68,13 +68,16 @@ Codul se caută în ordinea: cod de bare suplimentar (inclusiv bax cu multiplica
   "product": {
     "id": "3f6c…", "name": "Detergent X 5L", "sku": "DX-5", "barcode": "4840000000017",
     "extraBarcodes": [ { "code": "14840000000014", "multiplier": 4 } ],
-    "unit": "pcs", "price": 250, "wholesalePrice": 210, "active": true,
+    "unit": "pcs", "price": 250, "wholesalePrice": 210,
+    "discount": 10, "discountFrom": "2026-11-20", "discountTo": "2026-11-30", "salePrice": 225, "active": true,
     "photoUrl": "/api/products/3f6c…/photo",
     "stock": [ { "warehouseId": "6b1f…", "warehouseCode": "DEP-1", "warehouseName": "Depozit central", "quantity": 12 } ],
     "totalStock": 12, "quantityInWarehouse": 12
   }
 } }
 ```
+
+Reducerea pe produs: `discount` (%, `null` = fără), perioada `discountFrom` / `discountTo` (zile incluse, `null` = fără limită) și `salePrice` — prețul cu amănuntul după reducerea valabilă azi (`null` dacă azi nu e reducere).
 
 Cod necunoscut: `{ "ok": true, "data": { "found": false, "code": "…" } }` (HTTP 200).
 
@@ -86,7 +89,8 @@ Paginat (`limit` ≤ 5000), ordonat după `updatedAt`. Prima dată fără `updat
 { "ok": true,
   "data": [ { "id": "3f6c…", "name": "Detergent X 5L", "sku": "DX-5", "barcode": "4840000000017",
               "extraBarcodes": [ { "code": "14840000000014", "multiplier": 4 } ],
-              "unit": "pcs", "price": 250, "stock": 12, "active": true, "updatedAt": "2026-11-01T10:00:00.000Z" } ],
+              "unit": "pcs", "price": 250, "discount": null, "discountFrom": null, "discountTo": null, "salePrice": null,
+              "stock": 12, "active": true, "updatedAt": "2026-11-01T10:00:00.000Z" } ],
   "meta": { "page": 1, "limit": 1000, "total": 1840, "hasMore": true } }
 ```
 

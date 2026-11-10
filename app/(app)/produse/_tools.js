@@ -19,6 +19,7 @@ const LABELS = {
   price: "Preț",
   wholesalePrice: "Preț angro",
   costPrice: "Preț achiziție",
+  discount: "Reducere %",
   minStock: "Stoc minim",
   description: "Descriere",
   warehouse: "Depozit",
@@ -26,9 +27,9 @@ const LABELS = {
 };
 
 const TEMPLATE =
-  "Denumire;SKU;Cod de bare;Categorie;Marca;Ambalaj;Unitate;Pret;Pret angro;Pret achizitie;Stoc minim;Depozit;Cantitate\n" +
-  "Koch-Chemie Green Star 11 kg;KC-GS-11;4004764700038;Chimie auto;Koch-Chemie;Canistră 11 kg;buc;1450;1300;980;3;Depozit principal;12\n" +
-  "FOX LINE Spumă activă 5 L;FOX-FOAM-5;;Spumă activă & detergenți;FOX LINE;Canistră 5 L;buc;420;380;260;5;Depozit principal;30\n";
+  "Denumire;SKU;Cod de bare;Categorie;Marca;Ambalaj;Unitate;Pret;Pret angro;Pret achizitie;Reducere %;Stoc minim;Depozit;Cantitate\n" +
+  "Koch-Chemie Green Star 11 kg;KC-GS-11;4004764700038;Chimie auto;Koch-Chemie;Canistră 11 kg;buc;1450;1300;980;;3;Depozit principal;12\n" +
+  "FOX LINE Spumă activă 5 L;FOX-FOAM-5;;Spumă activă & detergenți;FOX LINE;Canistră 5 L;buc;420;380;260;10;5;Depozit principal;30\n";
 
 export function ImportDrawer({ open, onClose }) {
   const toast = useToast();

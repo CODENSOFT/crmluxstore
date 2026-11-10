@@ -14,6 +14,7 @@ import { DataTable, Pagination, Toolbar } from "@/app/_components/table";
 import { Menu } from "@/app/_components/overlay";
 import { Plus, DownloadSimple, UploadSimple, Package, Rows, SquaresFour, ImageIcon, Tag, DotsThree, Globe } from "@/app/_components/icons";
 import { ImportDrawer, CategoriesModal } from "./_tools";
+import { DiscountPrice } from "@/app/_components/price";
 
 const STOCK = { in: { tone: "ok", label: "În stoc" }, low: { tone: "warn", label: "Stoc mic" }, out: { tone: "bad", label: "Fără stoc" } };
 
@@ -86,7 +87,7 @@ function ProductsInner() {
       sort: "price",
       render: (p) => (
         <div className="whitespace-nowrap">
-          <div className="tnum font-medium text-fg">{money(p.price)}</div>
+          <DiscountPrice product={p} stacked className="font-medium text-fg" />
           {p.wholesalePrice > 0 && <div className="tnum text-[12px] text-fg-3">angro {money(p.wholesalePrice)}</div>}
         </div>
       ),
@@ -248,7 +249,7 @@ function ProductsInner() {
                     <div className="line-clamp-2 text-[13px] font-medium leading-snug text-fg">{p.name}</div>
                     <div className="mt-0.5 truncate text-[11.5px] text-fg-3">{p.sku || p.brand || p.categoryName || "—"}</div>
                     <div className="mt-auto flex items-end justify-between pt-2">
-                      <span className="tnum text-[13.5px] font-semibold text-fg">{money(p.price)}</span>
+                      <DiscountPrice product={p} stacked align="start" className="text-[13.5px] font-semibold text-fg" />
                       <Badge tone={STOCK[p.stockStatus]?.tone}>{num(p.totalStock)} {UNIT_LABELS[p.unit]}</Badge>
                     </div>
                   </div>
@@ -276,7 +277,7 @@ function ProductsInner() {
                   <div className="truncate text-[12px] text-fg-3">{p.sku || p.brand || "—"}</div>
                 </div>
                 <div className="text-right">
-                  <div className="tnum text-[13px] font-medium text-fg">{money(p.price)}</div>
+                  <DiscountPrice product={p} stacked className="text-[13px] font-medium text-fg" />
                   <div className={cx("tnum text-[12px]", p.stockStatus === "out" ? "text-bad" : p.stockStatus === "low" ? "text-warn" : "text-fg-3")}>
                     {num(p.totalStock)} {UNIT_LABELS[p.unit]}
                   </div>

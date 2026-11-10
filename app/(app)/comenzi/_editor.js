@@ -6,6 +6,7 @@ import { api, apiPost, apiPatch } from "@/lib/client";
 import { useApi, invalidate } from "@/lib/useApi";
 import { useUser, can } from "@/app/_components/user";
 import { money, num } from "@/lib/format";
+import { activeDiscount } from "@/lib/discount";
 import { CHANNELS, PAYMENT_METHODS, UNIT_LABELS, CUSTOMER_SEGMENTS, segmentLabel } from "@/lib/constants";
 import {
   Card, CardHeader, Button, Field, Input, NumberInput, Select, Textarea, Segmented, Badge, Alert, EmptyState, Skeleton, cx, IconButton, PageHeader,
@@ -195,11 +196,13 @@ export default function OrderEditor({ order, template }) {
   }, [warehouses, settings]);
   const warehouse = warehouseSel || defaultWh;
 
+  // Reducerea implicita a liniei: cea mai mare dintre reducerea clientului si promotia produsului (lib/discount.js)
+  const lineDiscount = (p, clientDisc = custDiscount) => String(Math.max(Number(clientDisc) || 0, activeDiscount(p)));
+
   // Alegerea clientului: reducerea lui pe liniile neatinse manual + adresa de livrare
   const selectCustomer = (c) => {
     setCustomer(c);
-    const disc = String(Number(c?.discount) || 0);
-    setLines((ls) => ls.map((l) => (l.discountTouched ? l : { ...l, discount: disc })));
+    setLines((ls) => ls.map((l) => (l.discountTouched ? l : { ...l, discount: lineDiscount(productById.get(l.productId) || l.fallback, c?.discount) })));
     if (c && !editing) setDelivery((d) => ({ ...d, city: d.city || c.city || "", address: d.address || c.address || "" }));
   };
 
@@ -259,7 +262,7 @@ export default function OrderEditor({ order, template }) {
     setLines((ls) => {
       const existing = ls.find((l) => l.productId === String(p._id) && l.warehouse === warehouse);
       if (existing) return ls.map((l) => (l === existing ? { ...l, quantity: String((Number(l.quantity) || 0) + 1) } : l));
-      return [...ls, { key: newKey(), productId: String(p._id), warehouse, quantity: "1", unitPrice: "", discount: String(custDiscount), discountTouched: false }];
+      return [...ls, { key: newKey(), productId: String(p._id), warehouse, quantity: "1", unitPrice: "", discount: lineDiscount(p), discountTouched: false }];
     });
   };
   const update = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));

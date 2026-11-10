@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { apiPatch, apiPost } from "@/lib/client";
 import { invalidate, useApi } from "@/lib/useApi";
 import { UNITS, UNIT_NAMES } from "@/lib/constants";
-import { money, pct } from "@/lib/format";
+import { money, pct, ymd, formatDate } from "@/lib/format";
+import { activeDiscount, discountedPrice } from "@/lib/discount";
 import { Button, Field, FormSection, Input, NumberInput, Select, Textarea, Switch, IconButton, Badge } from "@/app/_components/ui";
 import { useToast } from "@/app/_components/overlay";
 import { FormPage } from "@/app/_components/formpage";
 import { ProductPicker } from "@/app/_components/pickers";
 import { GalleryEditor } from "./_gallery";
-import { ImageIcon, Trash, Tag, Coins, Warehouse, Cube, PlugsConnected } from "@/app/_components/icons";
+import { ImageIcon, Trash, Tag, Coins, Percent, Warehouse, Cube, PlugsConnected } from "@/app/_components/icons";
 
 const EMPTY = {
   name: "",
@@ -26,6 +27,9 @@ const EMPTY = {
   costPrice: "",
   vatRate: "",
   minStock: "",
+  discount: "",
+  discountFrom: "",
+  discountTo: "",
   description: "",
   photos: [],
   active: true,
@@ -45,6 +49,7 @@ function initialForm(product) {
     costPrice: product.costPrice != null ? String(product.costPrice) : "",
     vatRate: product.vatRate != null ? String(product.vatRate) : "",
     minStock: product.minStock != null ? String(product.minStock) : "",
+    discount: product.discount > 0 ? String(product.discount) : "",
     active: product.active !== false,
     photos: product.photos?.length ? product.photos : product.photo ? [product.photo] : [],
     components: (product.components || []).map((c) => ({ product: c.product?._id || c.product, name: c.productName || c.product?.name, quantity: String(c.quantity) })),
@@ -69,7 +74,12 @@ export function ProductForm({ product }) {
   const [saving, setSaving] = useState(false);
 
   const set = (p) => setF((x) => ({ ...x, ...p }));
-  const missing = [!f.name.trim() && "Denumire", String(f.price).trim() === "" && "Preț cu amănuntul"].filter(Boolean);
+  const missing = [
+    !f.name.trim() && "Denumire",
+    String(f.price).trim() === "" && "Preț cu amănuntul",
+    Number(f.discount) > 100 && "Reducere până la 100%",
+    f.discountFrom && f.discountTo && f.discountFrom > f.discountTo && "Perioada reducerii",
+  ].filter(Boolean);
   const price = Number(f.price) || 0;
   const cost = Number(f.costPrice) || 0;
   const wholesale = Number(f.wholesalePrice) || 0;
@@ -77,6 +87,15 @@ export function ProductForm({ product }) {
   // marja calculata pe pret fara TVA (pretul de vanzare include TVA)
   const net = (p) => (settings?.pricesIncludeVat !== false ? p / (1 + vat / 100) : p);
   const margin = (p) => (p > 0 && cost > 0 ? ((net(p) - cost) / net(p)) * 100 : null);
+  const disc = Math.min(100, Number(f.discount) || 0);
+  const discNow = activeDiscount({ discount: disc, discountFrom: f.discountFrom, discountTo: f.discountTo });
+  const today = ymd();
+  const discState =
+    disc <= 0 ? null
+    : discNow ? { tone: "ok", text: "Activă acum" }
+    : f.discountFrom && today < f.discountFrom ? { tone: "accent", text: `Începe ${formatDate(f.discountFrom)}` }
+    : { tone: "warn", text: "Expirată" };
+  const badDates = f.discountFrom && f.discountTo && f.discountFrom > f.discountTo;
 
   const pickable = useMemo(() => (all || []).filter((p) => String(p._id) !== String(product?._id)), [all, product]);
 
@@ -192,6 +211,45 @@ export function ProductForm({ product }) {
               {margin(price) != null && (
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-fg-2">
                   Marjă amănunt <span className="tnum font-semibold text-fg">{pct(margin(price))}</span>
+                </span>
+              )}
+            </div>
+          )}
+        </FormSection>
+
+        <FormSection
+          icon={Percent}
+          title="Reducere"
+          description="Promoție pe produs: se aplică automat în comenzi, pe site și în botul Telegram. Nu se cumulează cu reducerea clientului (se aplică cea mai mare); clienții cu preț individual nu o primesc."
+        >
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Reducere" hint="gol = fără reducere">
+              <NumberInput value={f.discount} onChange={(v) => set({ discount: v })} placeholder="—" suffix="%" />
+            </Field>
+            <Field label="De la" hint="gol = de acum">
+              <Input type="date" value={f.discountFrom} onChange={(e) => set({ discountFrom: e.target.value })} />
+            </Field>
+            <Field label="Până la" hint="gol = fără termen" error={badDates ? "Data de sfârșit e înaintea celei de început" : undefined}>
+              <Input type="date" value={f.discountTo} min={f.discountFrom || undefined} onChange={(e) => set({ discountTo: e.target.value })} />
+            </Field>
+          </div>
+          {disc > 0 && price > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={discState.tone} dot>
+                {discState.text}
+              </Badge>
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-fg-2">
+                Preț redus <span className="tnum text-fg-3 line-through">{money(price)}</span>
+                <span className="tnum font-semibold text-fg">{money(discountedPrice(price, disc))}</span>
+              </span>
+              {wholesale > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-fg-2">
+                  Angro redus <span className="tnum font-semibold text-fg">{money(discountedPrice(wholesale, disc))}</span>
+                </span>
+              )}
+              {margin(discountedPrice(price, disc)) != null && (
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-fg-2">
+                  Marjă la preț redus <span className="tnum font-semibold text-fg">{pct(margin(discountedPrice(price, disc)))}</span>
                 </span>
               )}
             </div>

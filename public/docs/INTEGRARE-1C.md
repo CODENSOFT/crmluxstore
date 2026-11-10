@@ -244,6 +244,9 @@ GET /api/v1/changes?after=0&limit=200[&entities=order,customer,product]
     "price": 1450.00,
     "wholesalePrice": 1300.00,
     "costPrice": 980.00,
+    "discount": 10,
+    "discountFrom": "2026-11-20",
+    "discountTo": "2026-11-30",
     "vatRate": 20,
     "minStock": 3,
     "active": true
@@ -253,6 +256,7 @@ GET /api/v1/changes?after=0&limit=200[&entities=order,customer,product]
 
 - Câmpurile lipsă **nu** se modifică (trimiteți doar ce s-a schimbat, ex: doar `externalId` + `price`).
 - `price` = preț cu amănuntul (cu TVA), `wholesalePrice` = preț angro (clienți B2B), `costPrice` = preț de achiziție (fără TVA).
+- Reducere pe produs (promoție): `discount` = procent 0–100 (`0` sau `null` o scoate), `discountFrom` / `discountTo` = perioada, `AAAA-LL-ZZ`, zile incluse (`null` = fără limită). În comenzi se aplică automat, dar nu se cumulează cu reducerea clientului (se ia cea mai mare) și nu se aplică clienților cu preț individual sau liniilor trimise cu prețul lor.
 - Opțional `stock: [{ "warehouse": "DEP-1", "quantity": 12 }]` setează stocul absolut (vezi recomandarea din secțiunea 1).
 - `DELETE /products/{externalId|sku|id}` → produsul devine inactiv (istoricul rămâne).
 
@@ -261,9 +265,12 @@ GET /api/v1/changes?after=0&limit=200[&entities=order,customer,product]
 ```json
 { "id": "7c41…", "externalId": "8f2c…", "sku": "KC-GS-11", "name": "Koch-Chemie Green Star 11 kg",
   "unit": "bucata", "price": 1450, "wholesalePrice": 1300, "costPrice": 980,
+  "discount": 10, "discountFrom": "2026-11-20", "discountTo": "2026-11-30", "salePrice": 1305,
   "stock": [ { "warehouseId": "2b5d…", "warehouseCode": "DEP-1", "warehouseExternalId": "a1b2…", "quantity": 100 } ],
   "totalStock": 100, "active": true, "updatedAt": "2026-10-17T09:12:00.000Z" }
 ```
+
+`salePrice` = prețul cu amănuntul după reducerea valabilă azi (`null` dacă azi nu e reducere); se calculează la momentul răspunsului, deci pentru promoțiile programate folosiți `discount` + perioada.
 
 ### 5.4 Clienți (contragenți)
 

@@ -233,6 +233,12 @@ export default function TelegramCatalog({ category, query, lang, chatKey }) {
                       <span className="line-clamp-2 text-[15px] font-medium leading-snug">{p.name}</span>
                       <span className="mt-1 flex flex-wrap items-center gap-x-2 text-[13px]">
                         <span className="font-semibold">{p.price}</span>
+                        {p.was && (
+                          <>
+                            <span className="text-fg-3 line-through">{p.was}</span>
+                            <span className="rounded-md bg-bad px-1.5 text-[12px] font-semibold leading-5 text-white">−{p.discount}%</span>
+                          </>
+                        )}
                         <span className={p.inStock ? "text-ok" : "text-fg-3"}>{p.inStock ? t.inStock : t.outOfStock}</span>
                       </span>
                     </span>

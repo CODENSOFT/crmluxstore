@@ -18,6 +18,8 @@ import {
 import { PublishModal } from "../_publish";
 import { ProductGallery } from "../_gallery";
 import { BarcodesCard } from "./_barcodes";
+import { DiscountPrice } from "@/app/_components/price";
+import { activeDiscount } from "@/lib/discount";
 
 const REF_LINK = {
   Order: (id) => `/comenzi/${id}`,
@@ -263,8 +265,19 @@ export default function ProductPage({ params }) {
             <div className="space-y-3 px-5 py-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-[12.5px] text-fg-3">Preț cu amănuntul</span>
-                <span className="tnum text-[20px] font-semibold tracking-tight text-fg">{money(p.price)}</span>
+                <DiscountPrice product={p} stacked className="text-[20px] font-semibold tracking-tight text-fg" />
               </div>
+              {p.discount > 0 && (
+                <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-fg-3">
+                  <Badge tone={activeDiscount(p) ? "ok" : "neutral"} dot>
+                    Reducere {pct(p.discount, 2)}
+                  </Badge>
+                  {p.discountFrom || p.discountTo
+                    ? [p.discountFrom && `de la ${formatDate(p.discountFrom)}`, p.discountTo && `până la ${formatDate(p.discountTo)}`].filter(Boolean).join(" ")
+                    : "fără termen"}
+                  {!activeDiscount(p) && <span>· nu este activă azi</span>}
+                </div>
+              )}
               <DetailList
                 items={[
                   ["Preț angro", p.wholesalePrice ? `${money(p.wholesalePrice)}${margin(p.wholesalePrice) != null ? ` · marjă ${pct(margin(p.wholesalePrice))}` : ""}` : "—"],

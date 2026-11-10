@@ -17,7 +17,7 @@ export const GET = route(async ({ query }) => {
   if (query.get("light") === "1") {
     return sql`
       select p.id, p.name, p.sku, p.barcode, p.unit, p.price, p.wholesale_price, p.cost_price, p.category_id as category,
-             p.brand, p.packaging, p.is_composite, ${stockJson(sql)} as stock
+             p.brand, p.packaging, p.is_composite, p.discount, p.discount_from, p.discount_to, ${stockJson(sql)} as stock
       from products p where p.active order by lower(p.name)`;
   }
   const { page, limit, skip } = pagination(query, { defLimit: 50, maxLimit: 2000 });
@@ -45,6 +45,9 @@ export const GET = route(async ({ query }) => {
         "Preț amănunt": p.price || 0,
         "Preț angro": p.wholesalePrice ?? "",
         "Preț achiziție": p.costPrice ?? "",
+        "Reducere %": p.discount ?? "",
+        "Reducere de la": p.discountFrom || "",
+        "Reducere până la": p.discountTo || "",
         "Stoc total": p.totalStock,
         "Stoc minim": p.minStock ?? settings.lowStockThreshold,
         Activ: p.active === false ? "nu" : "da",

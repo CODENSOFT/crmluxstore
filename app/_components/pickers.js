@@ -6,6 +6,7 @@ import { cx, inputBase, Badge, shouldFocusOnOpen } from "./ui";
 import { api } from "@/lib/client";
 import { UNIT_LABELS, segmentLabel } from "@/lib/constants";
 import { num } from "@/lib/format";
+import { DiscountPrice } from "./price";
 
 /**
  * Camp de cautare cu lista derulanta si navigare din tastatura.
@@ -199,7 +200,7 @@ export function ProductPicker({ products, warehouse, onSelect, placeholder = "Ca
               </div>
             </div>
             <div className="shrink-0 text-right">
-              <div className="tnum text-[13px] font-medium text-fg">{num(price, 2)} MDL</div>
+              <DiscountPrice product={p} price={price} short className="text-[13px] font-medium text-fg" />
               <div className={cx("tnum text-[12px]", st > 0 ? "text-fg-3" : "text-bad")}>
                 {st > 0 ? `${num(st)} ${UNIT_LABELS[p.unit] || ""}` : "fără stoc"}
               </div>

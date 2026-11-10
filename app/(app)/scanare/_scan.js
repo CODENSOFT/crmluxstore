@@ -499,7 +499,18 @@ function LookupResult({ r }) {
           {!p.active && <Badge tone="bad" className="mt-1">Inactiv</Badge>}
           {r.multiplier > 1 && <Badge tone="info" className="mt-1">Cod de bax: × {num(r.multiplier)}</Badge>}
           <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1">
-            <div><div className="text-[12px] text-fg-4">Preț</div><div className="tnum text-[20px] font-semibold text-fg">{num(p.price, 2)} MDL</div></div>
+            <div>
+              <div className="text-[12px] text-fg-4">Preț</div>
+              {p.salePrice != null ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="tnum text-[20px] font-semibold text-fg">{num(p.salePrice, 2)} MDL</span>
+                  <span className="tnum text-[13px] text-fg-3 line-through">{num(p.price, 2)}</span>
+                  <span className="text-[13px] font-semibold text-bad">−{num(p.discount, 2)}%</span>
+                </div>
+              ) : (
+                <div className="tnum text-[20px] font-semibold text-fg">{num(p.price, 2)} MDL</div>
+              )}
+            </div>
             {p.wholesalePrice > 0 && <div><div className="text-[12px] text-fg-4">Angro</div><div className="tnum text-[20px] font-semibold text-fg-2">{num(p.wholesalePrice, 2)} MDL</div></div>}
             {p.quantityInWarehouse != null && <div><div className="text-[12px] text-fg-4">În depozitul ales</div><div className={cx("tnum text-[20px] font-semibold", p.quantityInWarehouse > 0 ? "text-ok" : "text-bad")}>{num(p.quantityInWarehouse)} {UNIT_LABELS[p.unit] || ""}</div></div>}
           </div>

@@ -16,7 +16,7 @@ const UNIT_ALIASES = Object.fromEntries([
 
 /**
  * Import produse din CSV/Excel (randurile sunt parsate in browser).
- * rows: [{ name, sku, barcode, category, brand, packaging, unit, price, wholesalePrice, costPrice, minStock, description, warehouse, quantity }]
+ * rows: [{ name, sku, barcode, category, brand, packaging, unit, price, wholesalePrice, costPrice, discount, minStock, description, warehouse, quantity }]
  */
 export const POST = route(
   async ({ req, user }) => {
@@ -41,6 +41,7 @@ export const POST = route(
           price: r.price,
           wholesalePrice: r.wholesalePrice,
           costPrice: r.costPrice,
+          discount: r.discount,
           minStock: r.minStock,
         });
         for (const k of Object.keys(fields)) if (fields[k] === undefined || fields[k] === null || fields[k] === "") delete fields[k];
